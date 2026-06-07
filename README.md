@@ -26,3 +26,26 @@ Import this repository into Vercel as a Next.js project. Use the default build c
 ```bash
 npm run build
 ```
+
+## Shared Data
+
+The app can be backed by Supabase so predictions work across devices and family members.
+
+The first migration in `supabase/migrations` creates:
+
+- `players`, linked to Supabase Auth users
+- `matches`, including `kickoff_at` and actual scores
+- `predictions`, linked to players and matches
+
+Row-level security keeps each player's predictions private until the related match has kicked off:
+
+- players can create and edit only their own predictions
+- predictions can be changed only before kickoff
+- other players' predictions are readable only after `matches.kickoff_at <= now()`
+
+Create a dedicated Supabase project for this app, apply the migrations, then add these Vercel environment variables:
+
+```bash
+NEXT_PUBLIC_SUPABASE_URL=
+NEXT_PUBLIC_SUPABASE_ANON_KEY=
+```
