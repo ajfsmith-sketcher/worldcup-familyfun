@@ -49,3 +49,12 @@ Create a dedicated Supabase project for this app, apply the migrations, then add
 NEXT_PUBLIC_SUPABASE_URL=
 NEXT_PUBLIC_SUPABASE_ANON_KEY=
 ```
+
+The match seed currently uses conservative placeholder kickoff times so predictions stay private. Replace
+`matches.kickoff_at` with official kickoff timestamps before opening the game broadly.
+
+In Supabase Auth settings, set the site URL and allowed redirect URLs to your Vercel domain, for example:
+
+```text
+https://worldcup-familyfun.vercel.app
+```
