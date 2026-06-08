@@ -8,7 +8,8 @@ Players predict the score for each group-stage match. The leaderboard awards:
 - 1 point for the correct winner, including a draw
 - 0 points for a wrong outcome
 
-Predictions and results are stored in the browser with `localStorage`.
+In production, predictions and results are stored in Supabase. The app can still fall back to browser `localStorage`
+when Supabase environment variables are not configured.
 
 ## Run Locally
 

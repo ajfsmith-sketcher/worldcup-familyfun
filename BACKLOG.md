@@ -1,0 +1,226 @@
+# World Cup Predictor Backlog
+
+Last reviewed: 2026-06-08
+
+## Current State
+
+- App is deployed at https://worldcup-familyfun.vercel.app.
+- Source is pushed to https://github.com/ajfsmith-sketcher/worldcup-familyfun.
+- Supabase project `world-cup-family-fun` is connected through Vercel environment variables.
+- Supabase schema is live with RLS for players, matches, and predictions.
+- Predictions are private until `matches.kickoff_at <= now()`.
+- Players sign in with Supabase magic links and create a display profile.
+- Group-stage match rows are seeded, but kickoff times are placeholders.
+
+## Needs Confirmation
+
+### 1. Confirm Supabase Auth Redirect Settings
+
+Status: not confirmed
+
+Set Supabase Auth site URL and allowed redirect URL to:
+
+```text
+https://worldcup-familyfun.vercel.app
+```
+
+Why it matters: magic-link sign-in may fail or redirect awkwardly until Supabase Auth is configured for the production domain.
+
+### 2. Confirm Admin User Model
+
+Status: not confirmed
+
+Actual score editing is currently admin-only via Supabase user metadata:
+
+```json
+{ "role": "admin" }
+```
+
+Decision needed: who should be admin, and should admin setup remain manual in Supabase or get an in-app admin flow later?
+
+### 3. Confirm Prediction Visibility Rule
+
+Status: mostly confirmed
+
+Chosen rule: everyone’s predictions are private until kickoff.
+
+Still to confirm: after kickoff, should all predictions become visible even before full-time, or only after the match finishes?
+
+## Must Do Before Family Use
+
+### 4. Replace Placeholder Kickoff Times
+
+Status: open
+
+All seeded matches currently use:
+
+```text
+2026-12-31 23:59:00+00
+```
+
+This intentionally keeps predictions private for now. Replace with official FIFA kickoff timestamps before inviting players.
+
+Notes:
+- This controls both prediction locking and reveal timing.
+- Use absolute UTC timestamps in Supabase.
+- Re-run privacy checks after updating.
+
+### 5. End-to-End Auth Test
+
+Status: open
+
+Test the full production flow:
+
+- Open live app.
+- Request magic link.
+- Return from email link.
+- Create display profile.
+- Save predictions.
+- Refresh/browser-switch and confirm predictions persist.
+
+### 6. Two-User Privacy Test
+
+Status: open
+
+Use two separate users/browsers:
+
+- User A saves predictions.
+- User B should not see User A’s predictions before kickoff.
+- Set one test match kickoff to the past.
+- User B should then see User A’s prediction for that match only.
+
+### 7. Admin Actual Score Test
+
+Status: open
+
+Confirm actual score entry works only for an admin user:
+
+- Non-admin cannot edit actual scores.
+- Admin can edit actual scores.
+- Leaderboard updates from saved actual scores.
+
+## Product Backlog
+
+### 8. Source Actual Scores Automatically
+
+Status: proposed
+
+Earlier idea: add a results import/update flow instead of manual admin score entry.
+
+Options:
+- Use a reliable football data API.
+- Maintain a small curated result update file.
+- Build an admin “matchday results” page.
+
+Open decision: which source should we trust for live/official results?
+
+### 9. Add Knockout Rounds
+
+Status: proposed
+
+Current app covers the 72 group-stage games only.
+
+Future work:
+- Add bracket/knockout matches.
+- Decide whether players predict knockout scorelines before the tournament or round-by-round.
+- Handle extra time/penalties scoring rules.
+
+### 10. Replace Placeholder Fixture Schedule With Official Schedule
+
+Status: proposed
+
+The current match order is generated from group teams, not an official date/time venue schedule.
+
+Future work:
+- Store official match numbers.
+- Add venues.
+- Add local-time display.
+- Sort by kickoff rather than generated group order.
+
+### 11. Family Invite / Access Model
+
+Status: proposed
+
+Current access is email magic-link sign-in. Anyone with access to the URL can request a link for their email.
+
+Possible enhancements:
+- Restrict allowed emails/domains.
+- Add invite codes.
+- Add a simple family roster managed by admin.
+
+### 12. Custom Domain
+
+Status: proposed
+
+Current production URL:
+
+```text
+https://worldcup-familyfun.vercel.app
+```
+
+Optional: add a friendlier custom domain or subdomain.
+
+### 13. Better Admin Surface
+
+Status: proposed
+
+Current admin result editing is inline in the match table.
+
+Possible admin improvements:
+- Dedicated result-entry page.
+- Only show finished/unscored matches.
+- Bulk import actual results.
+- Audit trail for result changes.
+
+### 14. UX Polish For Locked Matches
+
+Status: proposed
+
+Improve the “private until kickoff” experience:
+
+- Clearer labels for locked picks.
+- “Revealed” view after kickoff.
+- Explain why another player’s pick is hidden.
+- Show countdown to kickoff.
+
+### 15. Mobile Pass
+
+Status: proposed
+
+The app is responsive, but needs a proper phone walkthrough:
+
+- Sign-in flow on mobile.
+- Score input ergonomics.
+- Leaderboard scanning.
+- Long match list navigation.
+
+### 16. Tests
+
+Status: proposed
+
+Add coverage for:
+
+- Exact-score scoring.
+- Correct-winner scoring.
+- Draw outcome scoring.
+- Locking rules before/after kickoff.
+- Supabase row mapping.
+
+### 17. Dependency Audit
+
+Status: proposed
+
+`npm install` reported two moderate vulnerabilities in the dependency tree.
+
+Do not run `npm audit fix --force` blindly. Review whether the affected packages are transitive and whether Next/React upgrades are safe.
+
+## Done
+
+- Created standalone World Cup Predictor app separate from Family Admin.
+- Pushed app to GitHub.
+- Deployed app to Vercel production.
+- Added Supabase schema and row-level security.
+- Seeded 72 group-stage matches into Supabase.
+- Added Supabase client and shared-mode UI.
+- Added Vercel environment variables for Supabase.
+- Disabled Vercel SSO protection for family access.
