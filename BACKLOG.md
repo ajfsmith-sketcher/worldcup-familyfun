@@ -92,31 +92,25 @@ Use two separate users/browsers:
 
 Confirmed on 2026-06-08: one user cannot see another user's predictions before kickoff. Still to test: reveal behavior once a match kickoff has passed.
 
-### 7. Buy And Verify Resend Sending Domain
+### 7. Configure Verified Sending Provider
 
-Status: high priority
+Status: done
 
-Set up a custom sending domain before moving the family onto production auth emails.
+Set up a verified sender before moving the family onto production auth emails.
 
-Recommendation:
-- Buy a simple domain through Cloudflare, Porkbun, Namecheap, or another DNS-friendly registrar.
-- Add a sending subdomain in Resend, such as `mail.yourdomain.com`.
-- Verify the DKIM, SPF, and MX DNS records that Resend generates.
-- Use a sender like `World Cup Family Fun <no-reply@mail.yourdomain.com>`.
+Done via Brevo custom SMTP. Confirmed by live signup flow with 8 family users on 2026-06-08.
 
-Why it matters: Supabase custom SMTP needs a verified sender domain so magic-link emails are more reliable and less likely to hit provider limits or spam filters.
+Why it matters: Supabase custom SMTP needs a verified sender so magic-link emails are more reliable and less likely to hit provider limits or spam filters.
 
 ### 8. Configure Custom SMTP For Auth Emails
 
-Status: open
+Status: done
 
 Supabase's built-in auth email provider has very low rate limits and can return "email rate limit exceeded" during normal family signup/testing.
 
 Setup notes:
-- Use Resend if the sending domain setup above is complete, or choose another SMTP/email provider such as Postmark or SendGrid.
-- Configure Supabase `Authentication` -> `SMTP Settings`.
-- Confirm auth email rate limits under `Authentication` -> `Rate Limits`.
-- Re-test magic-link sign-in from phone and laptop after SMTP is configured.
+- Brevo custom SMTP is configured.
+- Re-tested by onboarding 8 users.
 - Keep the production Site URL and Redirect URLs set to `https://worldcup-familyfun.vercel.app`.
 
 ### 9. Admin Actual Score Test
