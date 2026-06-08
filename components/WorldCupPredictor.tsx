@@ -6,6 +6,7 @@ import { supabase, isSupabaseConfigured } from "@/lib/supabaseClient";
 import { scoringRules, worldCupGroups, worldCupMatches, type GroupId, type WorldCupMatch } from "@/lib/worldCup2026";
 
 type ViewMode = "group" | "date";
+type WorkspaceTab = "picks" | "family";
 type DateFilter = "all" | "today" | string;
 type GroupFilter = "all" | GroupId;
 type TeamFilter = "all" | string;
@@ -396,6 +397,7 @@ export function WorldCupPredictor() {
   const [players, setPlayers] = useState<Player[]>([]);
   const [matches, setMatches] = useState<MatchWithState[]>(worldCupMatches);
   const [activePlayerId, setActivePlayerId] = useState("");
+  const [activeWorkspaceTab, setActiveWorkspaceTab] = useState<WorkspaceTab>("picks");
   const [activeView, setActiveView] = useState<ViewMode>("group");
   const [activeDateFilter, setActiveDateFilter] = useState<DateFilter>("all");
   const [activeGroupFilter, setActiveGroupFilter] = useState<GroupFilter>("all");
@@ -1017,8 +1019,19 @@ export function WorldCupPredictor() {
       ) : null}
 
       {(!isSupabaseConfigured || (session && profileReady && activePlayer)) && (
-        <section className="predictor-grid">
-          <aside className="panel predictor-sidebar">
+        <>
+          <div className="view-tabs workspace-tabs" aria-label="Choose app section">
+            <button className={activeWorkspaceTab === "picks" ? "active" : ""} onClick={() => setActiveWorkspaceTab("picks")} type="button">
+              Picks
+            </button>
+            <button className={activeWorkspaceTab === "family" ? "active" : ""} onClick={() => setActiveWorkspaceTab("family")} type="button">
+              Family table
+            </button>
+          </div>
+
+          <section className={`predictor-grid ${activeWorkspaceTab === "picks" ? "picks-layout" : "family-layout"}`}>
+            {activeWorkspaceTab === "family" ? (
+              <aside className="panel predictor-sidebar">
             <div className="section-heading">
               <div>
                 <p className="eyebrow">Players</p>
@@ -1091,10 +1104,12 @@ export function WorldCupPredictor() {
             </div>
             {syncMessage ? <p className="sync-message">{syncMessage}</p> : null}
             {scoreSyncMessage ? <p className="sync-message">{scoreSyncMessage}</p> : null}
-          </aside>
+              </aside>
+            ) : null}
 
           <div className="predictor-main">
-            <section className="panel match-panel">
+            {activeWorkspaceTab === "picks" ? (
+              <section className="panel match-panel">
               <div className="section-heading">
                 <div>
                   <p className="eyebrow">Prediction sheet</p>
@@ -1215,9 +1230,11 @@ export function WorldCupPredictor() {
                   })}
                 </div>
               )}
-            </section>
+              </section>
+            ) : null}
 
-            <section className="panel">
+            {activeWorkspaceTab === "family" ? (
+              <section className="panel">
               <div className="section-heading">
                 <div>
                   <p className="eyebrow">Bragging rights</p>
@@ -1239,9 +1256,11 @@ export function WorldCupPredictor() {
                   </article>
                 ))}
               </div>
-            </section>
+              </section>
+            ) : null}
           </div>
-        </section>
+          </section>
+        </>
       )}
     </main>
   );

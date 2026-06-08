@@ -310,6 +310,10 @@ h2 {
   grid-template-columns: 310px minmax(0, 1fr);
 }
 
+.predictor-grid.picks-layout {
+  grid-template-columns: minmax(0, 1fr);
+}
+
 .predictor-sidebar {
   position: sticky;
   top: 18px;
@@ -449,6 +453,14 @@ h2 {
   background: var(--accent);
   border-color: var(--accent);
   color: #fff;
+}
+
+.workspace-tabs {
+  margin-bottom: 18px;
+}
+
+.workspace-tabs button {
+  min-height: 42px;
 }
 
 .match-filters {
