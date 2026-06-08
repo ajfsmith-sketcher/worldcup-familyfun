@@ -3,6 +3,22 @@
 import type { Session } from "@supabase/supabase-js";
 import { useEffect, useMemo, useState } from "react";
 import { supabase, isSupabaseConfigured } from "@/lib/supabaseClient";
+import {
+  arePredictionsRevealed,
+  completedCount,
+  completion,
+  hasScore,
+  isPredictionLocked,
+  isPredictionLockWarning,
+  matchPoints,
+  nextKickoffMatches,
+  nextPendingCount,
+  PREDICTION_LOCK_MS,
+  scoreKey,
+  scorePlayer,
+  sortMatchesByKickoff,
+  type ScorePick
+} from "@/lib/gameRules";
 import { scoringRules, worldCupGroups, worldCupMatches, type GroupId, type WorldCupMatch } from "@/lib/worldCup2026";
 
 type ViewMode = "group" | "date";
@@ -11,11 +27,6 @@ type DateFilter = "all" | "today" | string;
 type GroupFilter = "all" | GroupId;
 type TeamFilter = "all" | string;
 type SaveStatus = "idle" | "saving" | "saved" | "error";
-
-type ScorePick = {
-  away: string;
-  home: string;
-};
 
 type Player = {
   id: string;
@@ -96,8 +107,6 @@ type SavedState = {
 };
 
 const STORAGE_KEY = "world-cup-2026-family-predictor";
-const PREDICTION_WARNING_MS = 2 * 60 * 60 * 1000;
-const PREDICTION_LOCK_MS = 60 * 60 * 1000;
 const NEXT_UPCOMING_MATCH_COUNT = 8;
 
 const emptyScore = (): ScorePick => ({ away: "", home: "" });
@@ -123,45 +132,6 @@ const normalizeScore = (score: ScorePick | undefined): ScorePick => ({
   home: score?.home ?? ""
 });
 
-const hasScore = (score: ScorePick | undefined) => score?.home !== "" && score?.away !== "";
-
-const scoreKey = (score: ScorePick | undefined) => (hasScore(score) ? `${score?.home}-${score?.away}` : "");
-
-const outcome = (score: ScorePick | undefined) => {
-  if (!hasScore(score)) return "pending";
-  const home = Number(score?.home);
-  const away = Number(score?.away);
-  if (home > away) return "home";
-  if (away > home) return "away";
-  return "draw";
-};
-
-const matchPoints = (prediction: ScorePick | undefined, result: ScorePick | undefined) => {
-  if (!hasScore(prediction) || !hasScore(result)) return 0;
-  return (
-    Number(prediction?.home === result?.home) +
-    Number(prediction?.away === result?.away) +
-    Number(outcome(prediction) === outcome(result))
-  );
-};
-
-const completedCount = (scores: Record<string, ScorePick>, matches: MatchWithState[] = worldCupMatches) =>
-  matches.filter((match) => hasScore(scores[match.id])).length;
-
-const completion = (scores: Record<string, ScorePick>, matches: MatchWithState[] = worldCupMatches) =>
-  Math.round((completedCount(scores, matches) / matches.length) * 100);
-
-const scorePlayer = (player: Player, results: Record<string, ScorePick>, matches: MatchWithState[]) =>
-  matches.reduce((total, match) => total + matchPoints(player.matchPredictions[match.id], results[match.id]), 0);
-
-const isPredictionLocked = (match: MatchWithState) =>
-  Boolean(match.kickoffAt && new Date(match.kickoffAt).getTime() - PREDICTION_LOCK_MS <= Date.now());
-
-const isPredictionLockWarning = (match: MatchWithState) =>
-  Boolean(match.kickoffAt && !isPredictionLocked(match) && new Date(match.kickoffAt).getTime() - PREDICTION_WARNING_MS <= Date.now());
-
-const arePredictionsRevealed = (match: MatchWithState) => Boolean(match.kickoffAt && new Date(match.kickoffAt).getTime() <= Date.now());
-
 const formatKickoff = (match: MatchWithState) =>
   match.kickoffAt ? new Intl.DateTimeFormat("en-GB", { dateStyle: "medium", timeStyle: "short" }).format(new Date(match.kickoffAt)) : "Kickoff TBC";
 
@@ -171,20 +141,6 @@ const formatLockDeadline = (match: MatchWithState) =>
     : "Lock TBC";
 
 const formatOdds = (value: number | null | undefined) => (typeof value === "number" ? value.toFixed(2) : "-");
-
-const matchTime = (match: MatchWithState) => (match.kickoffAt ? new Date(match.kickoffAt).getTime() : Number.MAX_SAFE_INTEGER);
-
-const sortMatchesByKickoff = (currentMatches: MatchWithState[]) =>
-  [...currentMatches].sort((a, b) => matchTime(a) - matchTime(b) || a.groupId.localeCompare(b.groupId) || a.id.localeCompare(b.id));
-
-const nextKickoffMatches = (currentMatches: MatchWithState[]) => {
-  const futureMatches = sortMatchesByKickoff(currentMatches).filter((match) => match.kickoffAt && new Date(match.kickoffAt).getTime() > Date.now());
-  const nextKickoffAt = futureMatches[0]?.kickoffAt;
-  return nextKickoffAt ? futureMatches.filter((match) => match.kickoffAt === nextKickoffAt) : [];
-};
-
-const nextPendingCount = (scores: Record<string, ScorePick>, currentMatches: MatchWithState[]) =>
-  nextKickoffMatches(currentMatches).filter((match) => !hasScore(scores[match.id])).length;
 
 const teamLatestResult = (teamCode: string, currentMatches: MatchWithState[], results: Record<string, ScorePick>) => {
   const latestMatch = sortMatchesByKickoff(currentMatches)

@@ -1,0 +1,111 @@
+import { afterEach, describe, expect, it, vi } from "vitest";
+import {
+  arePredictionsRevealed,
+  completedCount,
+  completion,
+  isPredictionLocked,
+  isPredictionLockWarning,
+  matchPoints,
+  nextKickoffMatches,
+  nextPendingCount,
+  outcome,
+  scorePlayer,
+  type GameMatch,
+  type ScorePick
+} from "./gameRules";
+
+const score = (home: string, away: string): ScorePick => ({ away, home });
+
+const matches: GameMatch[] = [
+  { id: "A-1", kickoffAt: "2026-06-11T19:00:00Z" },
+  { id: "A-2", kickoffAt: "2026-06-12T01:00:00Z" },
+  { id: "A-3", kickoffAt: "2026-06-12T01:00:00Z" }
+];
+
+afterEach(() => {
+  vi.useRealTimers();
+});
+
+describe("matchPoints", () => {
+  it("awards one point for each correct team score and one point for the correct result", () => {
+    expect(matchPoints(score("2", "1"), score("2", "1"))).toBe(3);
+    expect(matchPoints(score("2", "0"), score("2", "1"))).toBe(2);
+    expect(matchPoints(score("3", "1"), score("2", "1"))).toBe(2);
+    expect(matchPoints(score("4", "2"), score("2", "1"))).toBe(1);
+    expect(matchPoints(score("0", "1"), score("2", "1"))).toBe(1);
+  });
+
+  it("handles draws and missing scores", () => {
+    expect(outcome(score("1", "1"))).toBe("draw");
+    expect(matchPoints(score("2", "2"), score("1", "1"))).toBe(1);
+    expect(matchPoints(score("", "2"), score("1", "2"))).toBe(0);
+    expect(matchPoints(undefined, score("1", "2"))).toBe(0);
+  });
+});
+
+describe("player scoring and completion", () => {
+  it("totals points across matches and counts completed picks", () => {
+    const player = {
+      matchPredictions: {
+        "A-1": score("2", "1"),
+        "A-2": score("0", "0"),
+        "A-3": score("", "")
+      }
+    };
+    const results = {
+      "A-1": score("2", "1"),
+      "A-2": score("1", "1"),
+      "A-3": score("3", "0")
+    };
+
+    expect(scorePlayer(player, results, matches)).toBe(4);
+    expect(completedCount(player.matchPredictions, matches)).toBe(2);
+    expect(completion(player.matchPredictions, matches)).toBe(67);
+  });
+});
+
+describe("prediction timing", () => {
+  it("warns two hours before kickoff and locks one hour before kickoff", () => {
+    vi.useFakeTimers();
+
+    vi.setSystemTime(new Date("2026-06-11T16:59:00Z"));
+    expect(isPredictionLockWarning(matches[0])).toBe(false);
+    expect(isPredictionLocked(matches[0])).toBe(false);
+
+    vi.setSystemTime(new Date("2026-06-11T17:00:00Z"));
+    expect(isPredictionLockWarning(matches[0])).toBe(true);
+    expect(isPredictionLocked(matches[0])).toBe(false);
+
+    vi.setSystemTime(new Date("2026-06-11T18:00:00Z"));
+    expect(isPredictionLockWarning(matches[0])).toBe(false);
+    expect(isPredictionLocked(matches[0])).toBe(true);
+  });
+
+  it("reveals family predictions at kickoff", () => {
+    vi.useFakeTimers();
+
+    vi.setSystemTime(new Date("2026-06-11T18:59:59Z"));
+    expect(arePredictionsRevealed(matches[0])).toBe(false);
+
+    vi.setSystemTime(new Date("2026-06-11T19:00:00Z"));
+    expect(arePredictionsRevealed(matches[0])).toBe(true);
+  });
+});
+
+describe("next matches", () => {
+  it("returns all matches sharing the next kickoff and counts missing picks", () => {
+    vi.useFakeTimers();
+    vi.setSystemTime(new Date("2026-06-11T20:00:00Z"));
+
+    expect(nextKickoffMatches(matches).map((match) => match.id)).toEqual(["A-2", "A-3"]);
+    expect(
+      nextPendingCount(
+        {
+          "A-2": score("1", "0"),
+          "A-3": score("", "")
+        },
+        matches
+      )
+    ).toBe(1);
+  });
+});

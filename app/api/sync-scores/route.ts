@@ -1,6 +1,8 @@
 import { createClient } from "@supabase/supabase-js";
 import { NextRequest, NextResponse } from "next/server";
 
+type SupabaseSyncClient = ReturnType<typeof createClient<any>>;
+
 type LocalMatch = {
   away_code: string;
   away_name: string;
@@ -75,6 +77,11 @@ const footballDataRateLimitInfo = (headers: Headers): RateLimitInfo => {
   };
 };
 
+type SyncContext = {
+  footballDataToken: string;
+  supabase: SupabaseSyncClient;
+};
+
 const normalize = (value: string | undefined) =>
   (value ?? "")
     .toLowerCase()
@@ -102,32 +109,7 @@ const findLocalMatch = (apiMatch: FootballDataMatch, localMatches: LocalMatch[])
   });
 };
 
-export async function POST(request: NextRequest) {
-  const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL;
-  const serviceRoleKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
-  const footballDataToken = process.env.FOOTBALL_DATA_API_TOKEN;
-
-  if (!supabaseUrl || !serviceRoleKey || !footballDataToken) {
-    return NextResponse.json(
-      { error: "Missing NEXT_PUBLIC_SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY, or FOOTBALL_DATA_API_TOKEN." },
-      { status: 500 }
-    );
-  }
-
-  const authHeader = request.headers.get("authorization");
-  const accessToken = authHeader?.startsWith("Bearer ") ? authHeader.slice("Bearer ".length) : "";
-  if (!accessToken) {
-    return NextResponse.json({ error: "Missing Supabase access token." }, { status: 401 });
-  }
-
-  const supabase = createClient(supabaseUrl, serviceRoleKey, {
-    auth: { autoRefreshToken: false, persistSession: false }
-  });
-  const { data: userData, error: userError } = await supabase.auth.getUser(accessToken);
-  if (userError || userData.user?.app_metadata?.role !== "admin") {
-    return NextResponse.json({ error: "Admin access required." }, { status: 403 });
-  }
-
+const syncScores = async ({ footballDataToken, supabase }: SyncContext) => {
   const [localResponse, apiResponse] = await Promise.all([
     supabase.from("matches").select("id, kickoff_at, home_code, home_name, away_code, away_name, external_match_id"),
     fetch("https://api.football-data.org/v4/competitions/WC/matches?season=2026", {
@@ -195,4 +177,69 @@ export async function POST(request: NextRequest) {
     unmatched,
     updated: updates.length - failed.length
   });
+};
+
+const createSyncContext = () => {
+  const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL;
+  const serviceRoleKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
+  const footballDataToken = process.env.FOOTBALL_DATA_API_TOKEN;
+
+  if (!supabaseUrl || !serviceRoleKey || !footballDataToken) {
+    return NextResponse.json(
+      { error: "Missing NEXT_PUBLIC_SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY, or FOOTBALL_DATA_API_TOKEN." },
+      { status: 500 }
+    );
+  }
+
+  return {
+    context: {
+      footballDataToken,
+      supabase: createClient<any>(supabaseUrl, serviceRoleKey, {
+        auth: { autoRefreshToken: false, persistSession: false }
+      })
+    }
+  };
+};
+
+const cronAuthorizationError = (request: NextRequest) => {
+  const cronSecret = process.env.CRON_SECRET;
+  if (!cronSecret) {
+    return NextResponse.json({ error: "Missing CRON_SECRET." }, { status: 500 });
+  }
+
+  const authHeader = request.headers.get("authorization");
+  if (authHeader !== `Bearer ${cronSecret}`) {
+    return NextResponse.json({ error: "Cron access required." }, { status: 401 });
+  }
+
+  return null;
+};
+
+export async function GET(request: NextRequest) {
+  const authError = cronAuthorizationError(request);
+  if (authError) return authError;
+
+  const setup = createSyncContext();
+  if ("status" in setup) return setup;
+
+  return syncScores(setup.context);
+}
+
+export async function POST(request: NextRequest) {
+  const setup = createSyncContext();
+  if ("status" in setup) return setup;
+
+  const authHeader = request.headers.get("authorization");
+  const accessToken = authHeader?.startsWith("Bearer ") ? authHeader.slice("Bearer ".length) : "";
+  if (!accessToken) {
+    return NextResponse.json({ error: "Missing Supabase access token." }, { status: 401 });
+  }
+
+  const { supabase } = setup.context;
+  const { data: userData, error: userError } = await supabase.auth.getUser(accessToken);
+  if (userError || userData.user?.app_metadata?.role !== "admin") {
+    return NextResponse.json({ error: "Admin access required." }, { status: 403 });
+  }
+
+  return syncScores(setup.context);
 }

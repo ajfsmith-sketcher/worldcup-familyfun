@@ -14,6 +14,8 @@ Last reviewed: 2026-06-08
 - Group-stage match rows are seeded with official match numbers, kickoff times, venues, and cities.
 - Picks and family leaderboard are split into separate app tabs.
 - The app highlights the next match or simultaneous next matches near the top of the page.
+- Vercel Cron is configured to call score sync hourly.
+- Automated tests cover scoring, lock timing, reveal timing, completion, and next-match logic.
 
 ## Needs Confirmation
 
@@ -33,7 +35,7 @@ Confirmed by live family sign-ins on 2026-06-08.
 
 ### 2. Confirm Admin User Model
 
-Status: not confirmed
+Status: confirmed for v1
 
 Actual score editing is currently admin-only via Supabase user metadata:
 
@@ -41,17 +43,22 @@ Actual score editing is currently admin-only via Supabase user metadata:
 { "role": "admin" }
 ```
 
-Decision needed: who should be admin, and should admin setup remain manual in Supabase or get an in-app admin flow later?
+Decision: keep admin setup manual in Supabase for v1. An in-app admin management flow can stay under Better Admin Surface.
+
+Confirmed:
+- Admin UI is only shown to users with `{ "role": "admin" }`.
+- Supabase RLS only allows match/result updates for users with admin app metadata.
+- Manual admin score editing has been tested during Match 1 reveal testing.
 
 ### 3. Confirm Prediction Visibility Rule
 
-Status: mostly confirmed
+Status: confirmed
 
 Chosen rule: everyone’s predictions are private until kickoff.
 
 Chosen rule: prediction entry turns amber two hours before kickoff and locks one hour before kickoff.
 
-Still to confirm: after kickoff, should all predictions become visible even before full-time, or only after the match finishes?
+Chosen rule: after kickoff, all predictions for that match become visible even before full-time.
 
 ## Must Do Before Family Use
 
@@ -120,7 +127,7 @@ Setup notes:
 
 ### 9. Admin Actual Score Test
 
-Status: open
+Status: done
 
 Confirm actual score entry works only for an admin user:
 
@@ -128,11 +135,16 @@ Confirm actual score entry works only for an admin user:
 - Admin can edit actual scores.
 - Leaderboard updates from saved actual scores.
 
+Confirmed by:
+- Admin-only UI check in the app.
+- Admin-only Supabase RLS policy on `public.matches`.
+- Match 1 test score entry, reveal, points calculation, and score clearing.
+
 ## Product Backlog
 
 ### 10. Source Actual Scores Automatically
 
-Status: partially implemented
+Status: mostly implemented
 
 Candidate: football-data.org
 
@@ -160,8 +172,14 @@ Implementation notes:
 - Test `GET https://api.football-data.org/v4/competitions/WC/matches?season=2026` once 2026 fixtures/results are available.
 - External mapping fields and odds fields have been added to `matches`.
 - A protected `/api/sync-scores` route pulls scores/odds and writes actual scores into Supabase for admin users.
-- Add Vercel Cron to run syncs more frequently on matchdays.
-- Keep a small audit trail or timestamp so we can see when scores were last updated.
+- Vercel Cron is configured to call `/api/sync-scores` hourly.
+- Cron calls require `CRON_SECRET` as a bearer token.
+- `last_synced_at` shows when scores were last updated.
+
+Remaining:
+- Add `CRON_SECRET` in Vercel project environment variables.
+- Confirm the production cron invocation after the next deployment.
+- Re-test once football-data.org has final/live 2026 match data available.
 
 ### 11. Add Knockout Rounds
 
@@ -263,6 +281,17 @@ Add coverage for:
 - Locking rules before/after the one-hour cutoff.
 - Supabase row mapping.
 
+Implemented:
+- Scoring rules.
+- Draw outcomes.
+- Completion scoring.
+- Amber and lock timing.
+- Reveal-at-kickoff timing.
+- Next simultaneous matches and missing-picks count.
+
+Remaining:
+- Supabase row mapping and API sync route tests.
+
 ### 20. Dependency Audit
 
 Status: proposed
@@ -284,3 +313,5 @@ Do not run `npm audit fix --force` blindly. Review whether the affected packages
 - Split picks and family leaderboard into separate tabs.
 - Added an up-next panel for the next match or simultaneous next matches.
 - Fixed laptop-width family leaderboard overflow.
+- Added automated tests for game scoring and timing rules.
+- Added cron-safe score sync route and Vercel hourly cron config.
