@@ -17,7 +17,7 @@ Last reviewed: 2026-06-08
 
 ### 1. Confirm Supabase Auth Redirect Settings
 
-Status: not confirmed
+Status: confirmed
 
 Set Supabase Auth site URL and allowed redirect URL to:
 
@@ -26,6 +26,8 @@ https://worldcup-familyfun.vercel.app
 ```
 
 Why it matters: magic-link sign-in may fail or redirect awkwardly until Supabase Auth is configured for the production domain.
+
+Confirmed by live family sign-ins on 2026-06-08.
 
 ### 2. Confirm Admin User Model
 
@@ -64,7 +66,7 @@ Notes:
 
 ### 5. End-to-End Auth Test
 
-Status: open
+Status: done
 
 Test the full production flow:
 
@@ -75,9 +77,11 @@ Test the full production flow:
 - Save predictions.
 - Refresh/browser-switch and confirm predictions persist.
 
+Confirmed on 2026-06-08: predictions are visible across laptop and phone for the same user.
+
 ### 6. Two-User Privacy Test
 
-Status: open
+Status: partially done
 
 Use two separate users/browsers:
 
@@ -85,6 +89,8 @@ Use two separate users/browsers:
 - User B should not see User A’s predictions before kickoff.
 - Set one test match kickoff to the past.
 - User B should then see User A’s prediction for that match only.
+
+Confirmed on 2026-06-08: one user cannot see another user's predictions before kickoff. Still to test: reveal behavior once a match kickoff has passed.
 
 ### 7. Buy And Verify Resend Sending Domain
 
