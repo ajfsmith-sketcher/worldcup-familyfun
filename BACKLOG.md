@@ -16,6 +16,8 @@ Last reviewed: 2026-06-08
 - The app highlights the next match or simultaneous next matches near the top of the page.
 - Vercel Cron is configured to call score sync hourly.
 - Automated tests cover scoring, lock timing, reveal timing, completion, and next-match logic.
+- Knockout rounds are available as bracket-placeholder fixtures.
+- A scorers tab is available and wired to provider-synced scorer data.
 
 ## Needs Confirmation
 
@@ -183,25 +185,33 @@ Remaining:
 
 ### 11. Add Knockout Rounds
 
-Status: proposed
+Status: mostly implemented
 
-Current app covers the 72 group-stage games only.
+Current app covers all 104 tournament matches.
 
-Future work:
-- Add bracket/knockout matches.
-- Decide whether players predict knockout scorelines before the tournament or round-by-round.
-- Handle extra time/penalties scoring rules.
+Implementation:
+- Added matches 73-104 as bracket placeholders with known dates, kickoff times, venues, and rounds.
+- Added a dedicated Knockouts tab for knockout score picks.
+- Existing score prediction and lock rules apply to knockout matches.
+
+Remaining:
+- Replace bracket placeholders with real teams as the tournament progresses.
+- Decide whether knockout scoring should treat extra time/penalties differently.
 
 ### 12. Track Tournament Scorers
 
-Status: proposed
+Status: partially implemented
 
 Football-data.org has a competition scorers endpoint, but plan access still needs to be confirmed with an API token.
 
-Future work:
-- Confirm whether World Cup scorers are available on the free plan.
-- Add a separate scorers tab.
-- Store scorer rows from the provider if we want historical snapshots.
+Implementation:
+- Added a separate Scorers tab.
+- Added `tournament_scorers` table with RLS.
+- Score sync now attempts to fetch `/v4/competitions/WC/scorers?season=2026`.
+- Sync does not fail if scorers are unavailable or plan-gated.
+
+Remaining:
+- Confirm whether World Cup scorers are available on the free plan once tournament data is live.
 - Decide whether scorer tracking is informational only or part of the family game.
 
 ### 13. Monitor Fixture Schedule Changes
@@ -315,3 +325,5 @@ Do not run `npm audit fix --force` blindly. Review whether the affected packages
 - Fixed laptop-width family leaderboard overflow.
 - Added automated tests for game scoring and timing rules.
 - Added cron-safe score sync route and Vercel hourly cron config.
+- Added knockout-round fixtures and a Knockouts tab.
+- Added tournament scorer storage, sync attempt, and Scorers tab.

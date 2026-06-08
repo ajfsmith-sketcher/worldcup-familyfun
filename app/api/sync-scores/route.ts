@@ -38,6 +38,22 @@ type FootballDataMatch = {
   };
 };
 
+type FootballDataScorer = {
+  assists?: number | null;
+  goals?: number | null;
+  penalties?: number | null;
+  playedMatches?: number | null;
+  player?: {
+    id?: number | null;
+    name?: string;
+  };
+  team?: {
+    id?: number | null;
+    name?: string;
+    tla?: string;
+  };
+};
+
 type RateLimitInfo = {
   limit?: string;
   remaining?: string;
@@ -110,9 +126,13 @@ const findLocalMatch = (apiMatch: FootballDataMatch, localMatches: LocalMatch[])
 };
 
 const syncScores = async ({ footballDataToken, supabase }: SyncContext) => {
-  const [localResponse, apiResponse] = await Promise.all([
+  const [localResponse, apiResponse, scorersResponse] = await Promise.all([
     supabase.from("matches").select("id, kickoff_at, home_code, home_name, away_code, away_name, external_match_id"),
     fetch("https://api.football-data.org/v4/competitions/WC/matches?season=2026", {
+      headers: { "X-Auth-Token": footballDataToken },
+      next: { revalidate: 0 }
+    }),
+    fetch("https://api.football-data.org/v4/competitions/WC/scorers?season=2026", {
       headers: { "X-Auth-Token": footballDataToken },
       next: { revalidate: 0 }
     })
@@ -130,9 +150,12 @@ const syncScores = async ({ footballDataToken, supabase }: SyncContext) => {
   }
 
   const apiPayload = (await apiResponse.json()) as { matches?: FootballDataMatch[] };
+  const scorerRateLimit = footballDataRateLimitInfo(scorersResponse.headers);
   const localMatches = (localResponse.data ?? []) as LocalMatch[];
   const updates = [];
   const unmatched = [];
+  let scorerError: string | undefined;
+  let scorersUpdated = 0;
 
   for (const apiMatch of apiPayload.matches ?? []) {
     const localMatch = findLocalMatch(apiMatch, localMatches);
@@ -170,10 +193,42 @@ const syncScores = async ({ footballDataToken, supabase }: SyncContext) => {
   const results = await Promise.all(updates);
   const failed = results.filter((result) => result.error).map((result) => result.error?.message);
 
+  if (scorersResponse.ok) {
+    const scorerPayload = (await scorersResponse.json()) as { scorers?: FootballDataScorer[] };
+    const scorerRows = (scorerPayload.scorers ?? [])
+      .filter((scorer) => scorer.player?.name)
+      .map((scorer) => ({
+        assists: scorer.assists ?? null,
+        external_player_id: scorer.player?.id ? String(scorer.player.id) : null,
+        external_team_id: scorer.team?.id ? String(scorer.team.id) : null,
+        goals: scorer.goals ?? 0,
+        last_synced_at: new Date().toISOString(),
+        penalties: scorer.penalties ?? null,
+        played_matches: scorer.playedMatches ?? null,
+        player_name: scorer.player?.name ?? "Unknown player",
+        team_code: scorer.team?.tla ?? null,
+        team_name: scorer.team?.name ?? null
+      }));
+
+    if (scorerRows.length > 0) {
+      const scorerResult = await supabase.from("tournament_scorers").upsert(scorerRows, { onConflict: "player_name,team_name" });
+      if (scorerResult.error) {
+        scorerError = scorerResult.error.message;
+      } else {
+        scorersUpdated = scorerRows.length;
+      }
+    }
+  } else {
+    scorerError = `football-data.org scorers returned ${scorersResponse.status}`;
+  }
+
   return NextResponse.json({
     failed,
     matched: updates.length,
     rateLimit,
+    scorerError,
+    scorerRateLimit,
+    scorersUpdated,
     unmatched,
     updated: updates.length - failed.length
   });

@@ -2,7 +2,7 @@
 
 A private family score predictor for the FIFA World Cup 2026.
 
-Players predict the score for each group-stage match. The leaderboard awards:
+Players predict the score for each World Cup match, from the group stage through the final. The leaderboard awards:
 
 - 1 point for the correct home-team score
 - 1 point for the correct away-team score
@@ -35,8 +35,9 @@ The app can be backed by Supabase so predictions work across devices and family 
 The first migration in `supabase/migrations` creates:
 
 - `players`, linked to Supabase Auth users
-- `matches`, including official group-stage kickoffs, venues, cities, and actual scores
+- `matches`, including official group-stage and knockout kickoffs, venues, cities, and actual scores
 - `predictions`, linked to players and matches
+- `tournament_scorers`, populated by the score-sync route when provider data is available
 
 Row-level security keeps each player's predictions private until the related match has kicked off:
 
@@ -52,12 +53,13 @@ NEXT_PUBLIC_SUPABASE_URL=
 NEXT_PUBLIC_SUPABASE_ANON_KEY=
 SUPABASE_SERVICE_ROLE_KEY=
 FOOTBALL_DATA_API_TOKEN=
+CRON_SECRET=
 ```
 
 `SUPABASE_SERVICE_ROLE_KEY` and `FOOTBALL_DATA_API_TOKEN` are server-only values used by the admin score-sync route.
 Do not expose them with `NEXT_PUBLIC_`.
 
-The match seed includes the official group-stage schedule in UTC. Kickoff times drive prediction locking,
+The match seed includes the official group-stage schedule and knockout bracket placeholders in UTC. Kickoff times drive prediction locking,
 date filters, priority picks, and prediction visibility.
 
 In Supabase Auth settings, set the site URL and allowed redirect URLs to your Vercel domain, for example:

@@ -19,10 +19,18 @@ import {
   sortMatchesByKickoff,
   type ScorePick
 } from "@/lib/gameRules";
-import { scoringRules, worldCupGroups, worldCupMatches, type GroupId, type WorldCupMatch } from "@/lib/worldCup2026";
+import {
+  knockoutRounds,
+  scoringRules,
+  worldCupGroups,
+  worldCupMatches,
+  type GroupId,
+  type TournamentRound,
+  type WorldCupMatch
+} from "@/lib/worldCup2026";
 
 type ViewMode = "group" | "date";
-type WorkspaceTab = "picks" | "family";
+type WorkspaceTab = "picks" | "knockouts" | "scorers" | "family";
 type DateFilter = "all" | "today" | string;
 type GroupFilter = "all" | GroupId;
 type TeamFilter = "all" | string;
@@ -54,7 +62,7 @@ type MatchRow = {
   away_name: string;
   away_score: number | null;
   city: string | null;
-  group_id: GroupId;
+  group_id: GroupId | "KO";
   home_code: string;
   home_flag: string;
   home_name: string;
@@ -67,6 +75,7 @@ type MatchRow = {
   odds_away_win: number | null;
   odds_draw: number | null;
   odds_home_win: number | null;
+  round: TournamentRound | null;
   score_status: string | null;
   venue: string | null;
 };
@@ -87,6 +96,17 @@ type PredictionStatusRow = {
   next_pending_count: number;
   player_id: string;
   prediction_count: number;
+};
+
+type ScorerRow = {
+  assists: number | null;
+  goals: number;
+  last_synced_at: string | null;
+  penalties: number | null;
+  played_matches: number | null;
+  player_name: string;
+  team_code: string | null;
+  team_name: string | null;
 };
 
 type PredictionSaveState = {
@@ -275,7 +295,7 @@ const rowToMatch = (row: MatchRow): MatchWithState => ({
     draw: row.odds_draw,
     homeWin: row.odds_home_win
   },
-  round: "Group stage",
+  round: row.round ?? "Group stage",
   scoreStatus: row.score_status,
   venue: row.venue ?? ""
 });
@@ -352,6 +372,7 @@ function ScoreInputs({
 export function WorldCupPredictor() {
   const [players, setPlayers] = useState<Player[]>([]);
   const [matches, setMatches] = useState<MatchWithState[]>(worldCupMatches);
+  const [scorers, setScorers] = useState<ScorerRow[]>([]);
   const [activePlayerId, setActivePlayerId] = useState("");
   const [activeWorkspaceTab, setActiveWorkspaceTab] = useState<WorkspaceTab>("picks");
   const [activeView, setActiveView] = useState<ViewMode>("group");
@@ -409,19 +430,21 @@ export function WorldCupPredictor() {
     if (!supabase) return;
     setSyncMessage("Syncing shared game...");
 
-    const [playerResponse, matchResponse, predictionResponse, statusResponse] = await Promise.all([
+    const [playerResponse, matchResponse, predictionResponse, statusResponse, scorerResponse] = await Promise.all([
       supabase.from("players").select("id, display_name").order("display_name"),
       supabase.from("matches").select("*").order("match_number", { nullsFirst: false }),
       supabase.from("predictions").select("player_id, match_id, home_score, away_score"),
-      supabase.rpc("player_prediction_status")
+      supabase.rpc("player_prediction_status"),
+      supabase.from("tournament_scorers").select("*").order("goals", { ascending: false }).order("player_name")
     ]);
 
-    if (playerResponse.error || matchResponse.error || predictionResponse.error || statusResponse.error) {
+    if (playerResponse.error || matchResponse.error || predictionResponse.error || statusResponse.error || scorerResponse.error) {
       setSyncMessage(
         playerResponse.error?.message ||
           matchResponse.error?.message ||
           predictionResponse.error?.message ||
           statusResponse.error?.message ||
+          scorerResponse.error?.message ||
           "Could not sync shared game."
       );
       return;
@@ -475,6 +498,7 @@ export function WorldCupPredictor() {
     setMatches(sharedMatches);
     setResults(sharedResults);
     setPlayers(sharedPlayers);
+    setScorers((scorerResponse.data ?? []) as ScorerRow[]);
     setPredictionSaveStatus(currentPlayerSaveStatus);
     setActivePlayerId(currentSession.user.id);
     setSyncMessage("Shared game synced.");
@@ -504,6 +528,7 @@ export function WorldCupPredictor() {
         loadSharedState(nextSession);
       } else {
         setPlayers([]);
+        setScorers([]);
         setActivePlayerId("");
         setProfileReady(false);
       }
@@ -541,11 +566,19 @@ export function WorldCupPredictor() {
   );
   const dateOptions = useMemo(
     () =>
-      Array.from(new Set(sortMatchesByKickoff(matches).filter((match) => match.kickoffAt).map(matchDateKey))).sort((a, b) => a.localeCompare(b)),
+      Array.from(
+        new Set(
+          sortMatchesByKickoff(matches)
+            .filter((match) => match.round === "Group stage" && match.kickoffAt)
+            .map(matchDateKey)
+        )
+      ).sort((a, b) => a.localeCompare(b)),
     [matches]
   );
+  const groupStageMatchList = useMemo(() => matches.filter((match) => match.round === "Group stage"), [matches]);
+  const knockoutMatchList = useMemo(() => matches.filter((match) => match.round !== "Group stage"), [matches]);
   const filteredMatches = useMemo(() => {
-    const nextMatches = sortMatchesByKickoff(matches).filter((match) => {
+    const nextMatches = sortMatchesByKickoff(groupStageMatchList).filter((match) => {
       const matchesTeam =
         activeTeamFilter === "all" || match.homeTeam.code === activeTeamFilter || match.awayTeam.code === activeTeamFilter;
       const matchesGroup = activeGroupFilter === "all" || match.groupId === activeGroupFilter;
@@ -557,7 +590,17 @@ export function WorldCupPredictor() {
 
     if (!showUpcomingOnly) return nextMatches;
     return nextMatches.filter(isUpcomingMatch).slice(0, NEXT_UPCOMING_MATCH_COUNT);
-  }, [activeDateFilter, activeGroupFilter, activeTeamFilter, hideCompleted, matches, results, showUpcomingOnly]);
+  }, [activeDateFilter, activeGroupFilter, activeTeamFilter, groupStageMatchList, hideCompleted, results, showUpcomingOnly]);
+  const knockoutMatchesByRound = useMemo(
+    () =>
+      knockoutRounds
+        .map((round) => ({
+          matches: sortMatchesByKickoff(knockoutMatchList).filter((match) => match.round === round),
+          round
+        }))
+        .filter((section) => section.matches.length > 0),
+    [knockoutMatchList]
+  );
   const priorityCount = useMemo(
     () => filteredMatches.filter((match) => isPriorityPick(match, activePlayer?.matchPredictions[match.id])).length,
     [activePlayer?.matchPredictions, filteredMatches]
@@ -684,6 +727,8 @@ export function WorldCupPredictor() {
       error?: string;
       matched?: number;
       rateLimit?: { remaining?: string; reset?: string; warning?: string };
+      scorerError?: string;
+      scorersUpdated?: number;
       unmatched?: unknown[];
       updated?: number;
     };
@@ -699,7 +744,8 @@ export function WorldCupPredictor() {
       : payload.rateLimit?.remaining
         ? ` API requests remaining: ${payload.rateLimit.remaining}.`
         : "";
-    setScoreSyncMessage(`Scores synced. Updated ${payload.updated ?? 0} of ${payload.matched ?? 0} matched fixtures.${rateNote}`);
+    const scorerNote = payload.scorerError ? ` Scorers unavailable: ${payload.scorerError}.` : ` Scorers updated: ${payload.scorersUpdated ?? 0}.`;
+    setScoreSyncMessage(`Scores synced. Updated ${payload.updated ?? 0} of ${payload.matched ?? 0} matched fixtures.${scorerNote}${rateNote}`);
     setIsSyncingScores(false);
   };
 
@@ -911,7 +957,7 @@ export function WorldCupPredictor() {
           <p className="eyebrow">Family World Cup pool</p>
           <h1>World Cup 2026 predictor</h1>
           <p className="lede">
-            Pick the score for every group-stage game. Earn 1 point for the home score, 1 for the away score, and 1 for
+            Pick the score for every World Cup game. Earn 1 point for the home score, 1 for the away score, and 1 for
             the match result. Picks turn amber two hours before kickoff, lock one hour before kickoff, and stay private until the match starts.
           </p>
           <div className="action-row predictor-actions">
@@ -925,7 +971,7 @@ export function WorldCupPredictor() {
           <div className="pitch-line box top" />
           <div className="pitch-line box bottom" />
           <div className="football">⚽</div>
-          <span>{matches.length} group games</span>
+          <span>{matches.length} matches</span>
           <strong>{resultCount} scored</strong>
         </div>
       </header>
@@ -981,6 +1027,12 @@ export function WorldCupPredictor() {
             <button className={activeWorkspaceTab === "picks" ? "active" : ""} onClick={() => setActiveWorkspaceTab("picks")} type="button">
               Picks
             </button>
+            <button className={activeWorkspaceTab === "knockouts" ? "active" : ""} onClick={() => setActiveWorkspaceTab("knockouts")} type="button">
+              Knockouts
+            </button>
+            <button className={activeWorkspaceTab === "scorers" ? "active" : ""} onClick={() => setActiveWorkspaceTab("scorers")} type="button">
+              Scorers
+            </button>
             <button className={activeWorkspaceTab === "family" ? "active" : ""} onClick={() => setActiveWorkspaceTab("family")} type="button">
               Family table
             </button>
@@ -1018,7 +1070,7 @@ export function WorldCupPredictor() {
             </section>
           ) : null}
 
-          <section className={`predictor-grid ${activeWorkspaceTab === "picks" ? "picks-layout" : "family-layout"}`}>
+          <section className={`predictor-grid ${activeWorkspaceTab === "family" ? "family-layout" : "picks-layout"}`}>
             {activeWorkspaceTab === "family" ? (
               <aside className="panel predictor-sidebar">
             <div className="section-heading">
@@ -1219,6 +1271,76 @@ export function WorldCupPredictor() {
                   })}
                 </div>
               )}
+              </section>
+            ) : null}
+
+            {activeWorkspaceTab === "knockouts" ? (
+              <section className="panel match-panel">
+                <div className="section-heading">
+                  <div>
+                    <p className="eyebrow">Bracket picks</p>
+                    <h2>{activePlayer?.name}&apos;s knockout picks</h2>
+                  </div>
+                  <span className="badge ok">
+                    {activePlayer ? completedCount(activePlayer.matchPredictions, knockoutMatchList) : 0} / {knockoutMatchList.length} picked
+                  </span>
+                </div>
+                <p className="muted-copy">
+                  Knockout teams are shown as bracket slots until the tournament fills them in. You can still pick scores now and revise them until one hour before kickoff.
+                </p>
+                <div className="group-view">
+                  {knockoutMatchesByRound.map((section) => (
+                    <section className="group-section" key={section.round}>
+                      <div className="group-table-title">
+                        <strong>{section.round}</strong>
+                        <span>{section.matches.length} matches</span>
+                      </div>
+                      <div className="match-table">
+                        <div className="match-table-head">
+                          <span>Match</span>
+                          <span>Your score</span>
+                          <span>Actual score</span>
+                          <span>Pts</span>
+                        </div>
+                        {section.matches.map(renderMatchRow)}
+                      </div>
+                    </section>
+                  ))}
+                </div>
+              </section>
+            ) : null}
+
+            {activeWorkspaceTab === "scorers" ? (
+              <section className="panel">
+                <div className="section-heading">
+                  <div>
+                    <p className="eyebrow">Golden boot watch</p>
+                    <h2>Tournament scorers</h2>
+                  </div>
+                  <span className="badge ok">{scorers.length} players</span>
+                </div>
+                {scorers.length > 0 ? (
+                  <div className="scorers-table" aria-label="Tournament scorers">
+                    <div className="scorers-table-head">
+                      <span>Player</span>
+                      <span>Team</span>
+                      <span>Goals</span>
+                      <span>Assists</span>
+                    </div>
+                    {scorers.map((scorer) => (
+                      <div className="scorers-table-row" key={`${scorer.team_code ?? scorer.team_name}-${scorer.player_name}`}>
+                        <strong>{scorer.player_name}</strong>
+                        <span>{scorer.team_name ?? scorer.team_code ?? "-"}</span>
+                        <b>{scorer.goals}</b>
+                        <span>{scorer.assists ?? "-"}</span>
+                      </div>
+                    ))}
+                  </div>
+                ) : (
+                  <p className="empty">
+                    Scorers will appear here once football-data.org returns World Cup scorer data through the sync route.
+                  </p>
+                )}
               </section>
             ) : null}
 

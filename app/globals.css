@@ -326,7 +326,8 @@ h2 {
 
 .player-list,
 .scoring-list,
-.prediction-summary {
+.prediction-summary,
+.scorers-table {
   display: grid;
   gap: 10px;
 }
@@ -943,6 +944,39 @@ h2 {
   color: var(--muted);
 }
 
+.scorers-table-head,
+.scorers-table-row {
+  align-items: center;
+  display: grid;
+  gap: 10px;
+  grid-template-columns: minmax(0, 1.4fr) minmax(0, 1fr) 72px 72px;
+}
+
+.scorers-table-head {
+  color: var(--muted);
+  font-size: 0.78rem;
+  font-weight: 900;
+  text-transform: uppercase;
+}
+
+.scorers-table-row {
+  background: var(--surface-muted);
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  min-height: 52px;
+  padding: 10px 12px;
+}
+
+.scorers-table-row strong,
+.scorers-table-row span {
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+
+.scorers-table-row b {
+  font-size: 1.15rem;
+}
+
 @media (max-width: 1100px) {
   .predictor-grid.family-layout {
     grid-template-columns: 1fr;
@@ -961,6 +995,8 @@ h2 {
   .filter-select-grid,
   .match-row,
   .next-match-card,
+  .scorers-table-head,
+  .scorers-table-row,
   .prediction-summary {
     grid-template-columns: 1fr;
   }
