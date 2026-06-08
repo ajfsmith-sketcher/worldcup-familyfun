@@ -12,6 +12,8 @@ Last reviewed: 2026-06-08
 - Predictions turn amber two hours before kickoff and lock one hour before kickoff.
 - Players sign in with Supabase magic links and create a display profile.
 - Group-stage match rows are seeded with official match numbers, kickoff times, venues, and cities.
+- Picks and family leaderboard are split into separate app tabs.
+- The app highlights the next match or simultaneous next matches near the top of the page.
 
 ## Needs Confirmation
 
@@ -81,7 +83,7 @@ Confirmed on 2026-06-08: predictions are visible across laptop and phone for the
 
 ### 6. Two-User Privacy Test
 
-Status: partially done
+Status: done
 
 Use two separate users/browsers:
 
@@ -90,7 +92,10 @@ Use two separate users/browsers:
 - Set one test match kickoff to the past.
 - User B should then see User A’s prediction for that match only.
 
-Confirmed on 2026-06-08: one user cannot see another user's predictions before kickoff. Still to test: reveal behavior once a match kickoff has passed.
+Confirmed on 2026-06-08:
+- One user cannot see another user's predictions before kickoff.
+- Once kickoff has passed, other family picks become visible for that match.
+- Points calculate from the actual score entered by the admin.
 
 ### 7. Configure Verified Sending Provider
 
@@ -276,3 +281,6 @@ Do not run `npm audit fix --force` blindly. Review whether the affected packages
 - Added Supabase client and shared-mode UI.
 - Added Vercel environment variables for Supabase.
 - Disabled Vercel SSO protection for family access.
+- Split picks and family leaderboard into separate tabs.
+- Added an up-next panel for the next match or simultaneous next matches.
+- Fixed laptop-width family leaderboard overflow.
