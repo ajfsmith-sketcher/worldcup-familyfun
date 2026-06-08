@@ -343,15 +343,34 @@ h2 {
   opacity: 0.72;
 }
 
+.player-row[data-attention="true"] {
+  background: #fff1f2;
+  border-color: #f3a2ad;
+}
+
+.player-row[data-attention="true"]:disabled {
+  opacity: 1;
+}
+
 .player-row.active {
   background: #e8f3f1;
   border-color: #8dc4bb;
+}
+
+.player-row.active[data-attention="true"] {
+  background: #fff1f2;
+  border-color: #e45d70;
 }
 
 .player-row small {
   color: var(--muted);
   display: block;
   margin-top: 3px;
+}
+
+.player-row .attention-copy {
+  color: #9f1239;
+  font-weight: 900;
 }
 
 .player-row b {

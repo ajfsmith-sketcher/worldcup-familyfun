@@ -20,6 +20,8 @@ type Player = {
   id: string;
   matchPredictions: Record<string, ScorePick>;
   name: string;
+  nextPendingCount?: number;
+  predictionCount?: number;
 };
 
 type MatchWithState = WorldCupMatch & {
@@ -55,6 +57,12 @@ type PredictionRow = {
   home_score: number;
   match_id: string;
   player_id: string;
+};
+
+type PredictionStatusRow = {
+  next_pending_count: number;
+  player_id: string;
+  prediction_count: number;
 };
 
 type PredictionSaveState = {
@@ -93,7 +101,8 @@ const emptyMatchScores = (matches: MatchWithState[] = worldCupMatches) =>
 const createPlayer = (name: string): Player => ({
   id: `${Date.now()}-${Math.random().toString(16).slice(2)}`,
   matchPredictions: emptyMatchScores(),
-  name
+  name,
+  nextPendingCount: 0
 });
 
 const normalizeScore = (score: ScorePick | undefined): ScorePick => ({
@@ -152,6 +161,15 @@ const matchTime = (match: MatchWithState) => (match.kickoffAt ? new Date(match.k
 
 const sortMatchesByKickoff = (currentMatches: MatchWithState[]) =>
   [...currentMatches].sort((a, b) => matchTime(a) - matchTime(b) || a.groupId.localeCompare(b.groupId) || a.id.localeCompare(b.id));
+
+const nextKickoffMatches = (currentMatches: MatchWithState[]) => {
+  const futureMatches = sortMatchesByKickoff(currentMatches).filter((match) => match.kickoffAt && new Date(match.kickoffAt).getTime() > Date.now());
+  const nextKickoffAt = futureMatches[0]?.kickoffAt;
+  return nextKickoffAt ? futureMatches.filter((match) => match.kickoffAt === nextKickoffAt) : [];
+};
+
+const nextPendingCount = (scores: Record<string, ScorePick>, currentMatches: MatchWithState[]) =>
+  nextKickoffMatches(currentMatches).filter((match) => !hasScore(scores[match.id])).length;
 
 const formatMatchDate = (match: MatchWithState) =>
   match.kickoffAt ? new Intl.DateTimeFormat("en-GB", { dateStyle: "full" }).format(new Date(match.kickoffAt)) : "Kickoff TBC";
@@ -237,22 +255,21 @@ const buildGroupTable = (groupId: GroupId, matches: MatchWithState[], results: R
 const migratePlayers = (players: unknown): Player[] | null => {
   if (!Array.isArray(players)) return null;
 
-  return players
-    .map((player) => {
-      if (!player || typeof player !== "object") return null;
-      const currentPlayer = player as Partial<Player>;
-      return {
-        id: typeof currentPlayer.id === "string" ? currentPlayer.id : `${Date.now()}-${Math.random().toString(16).slice(2)}`,
-        matchPredictions: {
-          ...emptyMatchScores(),
-          ...(currentPlayer.matchPredictions && typeof currentPlayer.matchPredictions === "object"
-            ? currentPlayer.matchPredictions
-            : {})
-        },
-        name: typeof currentPlayer.name === "string" ? currentPlayer.name : "Player"
-      };
-    })
-    .filter((player): player is Player => Boolean(player));
+  const migratedPlayers: Array<Player | null> = players.map((player) => {
+    if (!player || typeof player !== "object") return null;
+    const currentPlayer = player as Partial<Player>;
+    return {
+      id: typeof currentPlayer.id === "string" ? currentPlayer.id : `${Date.now()}-${Math.random().toString(16).slice(2)}`,
+      matchPredictions: {
+        ...emptyMatchScores(),
+        ...(currentPlayer.matchPredictions && typeof currentPlayer.matchPredictions === "object" ? currentPlayer.matchPredictions : {})
+      },
+      name: typeof currentPlayer.name === "string" ? currentPlayer.name : "Player",
+      nextPendingCount: 0
+    };
+  });
+
+  return migratedPlayers.filter((player): player is Player => player !== null);
 };
 
 const rowToMatch = (row: MatchRow): MatchWithState => ({
@@ -396,14 +413,21 @@ export function WorldCupPredictor() {
     if (!supabase) return;
     setSyncMessage("Syncing shared game...");
 
-    const [playerResponse, matchResponse, predictionResponse] = await Promise.all([
+    const [playerResponse, matchResponse, predictionResponse, statusResponse] = await Promise.all([
       supabase.from("players").select("id, display_name").order("display_name"),
       supabase.from("matches").select("*").order("match_number", { nullsFirst: false }),
-      supabase.from("predictions").select("player_id, match_id, home_score, away_score")
+      supabase.from("predictions").select("player_id, match_id, home_score, away_score"),
+      supabase.rpc("player_prediction_status")
     ]);
 
-    if (playerResponse.error || matchResponse.error || predictionResponse.error) {
-      setSyncMessage(playerResponse.error?.message || matchResponse.error?.message || predictionResponse.error?.message || "Could not sync shared game.");
+    if (playerResponse.error || matchResponse.error || predictionResponse.error || statusResponse.error) {
+      setSyncMessage(
+        playerResponse.error?.message ||
+          matchResponse.error?.message ||
+          predictionResponse.error?.message ||
+          statusResponse.error?.message ||
+          "Could not sync shared game."
+      );
       return;
     }
 
@@ -418,10 +442,15 @@ export function WorldCupPredictor() {
     });
 
     const playerRows = (playerResponse.data ?? []) as PlayerRow[];
+    const statusByPlayerId = new Map(
+      ((statusResponse.data ?? []) as PredictionStatusRow[]).map((status) => [status.player_id, status])
+    );
     const sharedPlayers = playerRows.map((player) => ({
       id: player.id,
       matchPredictions: emptyMatchScores(sharedMatches),
-      name: player.display_name
+      name: player.display_name,
+      nextPendingCount: statusByPlayerId.get(player.id)?.next_pending_count ?? 0,
+      predictionCount: statusByPlayerId.get(player.id)?.prediction_count ?? 0
     }));
 
     const currentProfile = sharedPlayers.find((player) => player.id === currentSession.user.id);
@@ -545,8 +574,11 @@ export function WorldCupPredictor() {
       players
         .map((player) => ({
           ...player,
-          completion: completion(player.matchPredictions, matches),
+          completion:
+            typeof player.predictionCount === "number" ? Math.round((player.predictionCount / matches.length) * 100) : completion(player.matchPredictions, matches),
           exactScores: matches.filter((match) => matchPoints(player.matchPredictions[match.id], results[match.id]) === 3).length,
+          hasNextPending: Boolean(player.nextPendingCount),
+          pickCount: typeof player.predictionCount === "number" ? player.predictionCount : completedCount(player.matchPredictions, matches),
           score: scorePlayer(player, results, matches)
         }))
         .sort((a, b) => b.score - a.score || b.exactScores - a.exactScores || b.completion - a.completion || a.name.localeCompare(b.name)),
@@ -606,6 +638,19 @@ export function WorldCupPredictor() {
       if (latestStatus && latestStatus.scoreKey !== currentScoreKey) return currentStatus;
       return { ...currentStatus, [matchId]: { scoreKey: currentScoreKey, status: error ? "error" : "saved" } };
     });
+    if (!error) {
+      setPlayers((currentPlayers) =>
+        currentPlayers.map((player) =>
+          player.id === session.user.id
+            ? {
+                ...player,
+                nextPendingCount: nextPendingCount(player.matchPredictions, matches),
+                predictionCount: completedCount(player.matchPredictions, matches)
+              }
+            : player
+        )
+      );
+    }
     setSyncMessage(error ? error.message : "Prediction saved.");
   };
 
@@ -878,6 +923,7 @@ export function WorldCupPredictor() {
               {standings.map((player, index) => (
                 <button
                   className={`player-row ${player.id === activePlayer?.id ? "active" : ""}`}
+                  data-attention={player.hasNextPending || undefined}
                   disabled={isSupabaseConfigured && player.id !== session?.user.id}
                   key={player.id}
                   onClick={() => setActivePlayerId(player.id)}
@@ -887,8 +933,13 @@ export function WorldCupPredictor() {
                   <span>
                     <strong>{player.name}</strong>
                     <small>
-                      {player.completion}% complete · {player.exactScores} exact
+                      {player.pickCount} / {matches.length} picked · {player.exactScores} exact
                     </small>
+                    {player.hasNextPending ? (
+                      <small className="attention-copy">
+                        Missing next {player.nextPendingCount === 1 ? "match" : `${player.nextPendingCount} matches`}
+                      </small>
+                    ) : null}
                   </span>
                   <b>{player.score}</b>
                 </button>
