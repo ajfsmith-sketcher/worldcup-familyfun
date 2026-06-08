@@ -7,6 +7,7 @@ import { scoringRules, worldCupGroups, worldCupMatches, type GroupId, type World
 
 type ViewMode = "group" | "date";
 type DateFilter = "all" | "today" | string;
+type TeamFilter = "all" | string;
 
 type ScorePick = {
   away: string;
@@ -56,11 +57,13 @@ type PredictionRow = {
 
 type SavedState = {
   activeDateFilter: DateFilter;
-  activeGroup: GroupId | "all";
   activePlayerId: string;
+  activeTeamFilter: TeamFilter;
   activeView: ViewMode;
+  hideCompleted: boolean;
   players: Player[];
   results: Record<string, ScorePick>;
+  showUpcomingOnly: boolean;
 };
 
 const STORAGE_KEY = "world-cup-2026-family-predictor";
@@ -149,6 +152,10 @@ const formatDateKey = (dateKey: string) => {
 };
 
 const isTodayMatch = (match: MatchWithState) => match.kickoffAt && matchDateKey(match) === toDateKey(new Date());
+
+const hasCompletedResult = (match: MatchWithState, results: Record<string, ScorePick>) => hasScore(results[match.id]);
+
+const isUpcomingMatch = (match: MatchWithState) => !match.kickoffAt || new Date(match.kickoffAt).getTime() > Date.now();
 
 const isPriorityPick = (match: MatchWithState, score: ScorePick | undefined) => {
   if (!match.kickoffAt || hasScore(score) || isPredictionLocked(match)) return false;
@@ -317,7 +324,9 @@ export function WorldCupPredictor() {
   const [activePlayerId, setActivePlayerId] = useState("");
   const [activeView, setActiveView] = useState<ViewMode>("group");
   const [activeDateFilter, setActiveDateFilter] = useState<DateFilter>("all");
-  const [activeGroup, setActiveGroup] = useState<GroupId | "all">("all");
+  const [activeTeamFilter, setActiveTeamFilter] = useState<TeamFilter>("all");
+  const [showUpcomingOnly, setShowUpcomingOnly] = useState(false);
+  const [hideCompleted, setHideCompleted] = useState(false);
   const [results, setResults] = useState<Record<string, ScorePick>>(emptyMatchScores);
   const [newPlayerName, setNewPlayerName] = useState("");
   const [isLoaded, setIsLoaded] = useState(false);
@@ -341,7 +350,9 @@ export function WorldCupPredictor() {
             setActivePlayerId(parsed.activePlayerId || migratedPlayers[0].id);
             setActiveView(parsed.activeView === "date" ? "date" : "group");
             setActiveDateFilter(typeof parsed.activeDateFilter === "string" ? parsed.activeDateFilter : "all");
-            setActiveGroup(parsed.activeGroup || "all");
+            setActiveTeamFilter(typeof parsed.activeTeamFilter === "string" ? parsed.activeTeamFilter : "all");
+            setShowUpcomingOnly(Boolean(parsed.showUpcomingOnly));
+            setHideCompleted(Boolean(parsed.hideCompleted));
             setResults({
             ...emptyMatchScores(),
             ...(parsed.results && typeof parsed.results === "object" ? parsed.results : {})
@@ -448,35 +459,44 @@ export function WorldCupPredictor() {
 
   useEffect(() => {
     if (!isLoaded || isSupabaseConfigured) return;
-    window.localStorage.setItem(STORAGE_KEY, JSON.stringify({ activeDateFilter, activeGroup, activePlayerId, activeView, players, results }));
-  }, [activeDateFilter, activeGroup, activePlayerId, activeView, isLoaded, players, results]);
+    window.localStorage.setItem(
+      STORAGE_KEY,
+      JSON.stringify({ activeDateFilter, activePlayerId, activeTeamFilter, activeView, hideCompleted, players, results, showUpcomingOnly })
+    );
+  }, [activeDateFilter, activePlayerId, activeTeamFilter, activeView, hideCompleted, isLoaded, players, results, showUpcomingOnly]);
 
   const activePlayer = players.find((player) => player.id === activePlayerId) ?? players[0];
-  const filteredMatches = useMemo(
-    () => (activeGroup === "all" ? matches : matches.filter((match) => match.groupId === activeGroup)),
-    [activeGroup, matches]
-  );
-  const dateOrderedMatches = useMemo(() => sortMatchesByKickoff(filteredMatches), [filteredMatches]);
   const todayKey = toDateKey(new Date());
+  const teamOptions = useMemo(
+    () =>
+      Array.from(new Map(worldCupGroups.flatMap((group) => group.teams).map((team) => [team.code, team])).values()).sort((a, b) =>
+        a.name.localeCompare(b.name)
+      ),
+    []
+  );
   const dateOptions = useMemo(
     () =>
-      Array.from(new Set(dateOrderedMatches.filter((match) => match.kickoffAt).map(matchDateKey))).sort((a, b) => a.localeCompare(b)),
-    [dateOrderedMatches]
+      Array.from(new Set(sortMatchesByKickoff(matches).filter((match) => match.kickoffAt).map(matchDateKey))).sort((a, b) => a.localeCompare(b)),
+    [matches]
   );
-  const dateFilteredMatches = useMemo(
+  const filteredMatches = useMemo(
     () =>
-      dateOrderedMatches.filter((match) => {
-        if (activeDateFilter === "all") return true;
-        if (activeDateFilter === "today") return isTodayMatch(match);
-        return matchDateKey(match) === activeDateFilter;
+      sortMatchesByKickoff(matches).filter((match) => {
+        const matchesTeam =
+          activeTeamFilter === "all" || match.homeTeam.code === activeTeamFilter || match.awayTeam.code === activeTeamFilter;
+        const matchesDate =
+          activeDateFilter === "all" || (activeDateFilter === "today" ? isTodayMatch(match) : matchDateKey(match) === activeDateFilter);
+        const matchesUpcoming = !showUpcomingOnly || isUpcomingMatch(match);
+        const matchesCompleted = !hideCompleted || !hasCompletedResult(match, results);
+        return matchesTeam && matchesDate && matchesUpcoming && matchesCompleted;
       }),
-    [activeDateFilter, dateOrderedMatches]
+    [activeDateFilter, activeTeamFilter, hideCompleted, matches, results, showUpcomingOnly]
   );
   const priorityCount = useMemo(
-    () => dateFilteredMatches.filter((match) => isPriorityPick(match, activePlayer?.matchPredictions[match.id])).length,
-    [activePlayer?.matchPredictions, dateFilteredMatches]
+    () => filteredMatches.filter((match) => isPriorityPick(match, activePlayer?.matchPredictions[match.id])).length,
+    [activePlayer?.matchPredictions, filteredMatches]
   );
-  const visibleGroups = activeGroup === "all" ? worldCupGroups : worldCupGroups.filter((group) => group.id === activeGroup);
+  const visibleGroups = worldCupGroups.filter((group) => filteredMatches.some((match) => match.groupId === group.id));
   const resultCount = completedCount(results, matches);
 
   const standings = useMemo(
@@ -602,9 +622,11 @@ export function WorldCupPredictor() {
     const starterPlayer = createPlayer("Alex");
     setPlayers([starterPlayer]);
     setActivePlayerId(starterPlayer.id);
-    setActiveGroup("all");
     setActiveView("group");
     setActiveDateFilter("all");
+    setActiveTeamFilter("all");
+    setShowUpcomingOnly(false);
+    setHideCompleted(false);
     setResults(emptyMatchScores());
   };
 
@@ -853,26 +875,71 @@ export function WorldCupPredictor() {
                 </button>
               </div>
 
-              <div className="group-tabs" aria-label="Filter matches by group">
-                <button className={activeGroup === "all" ? "active" : ""} onClick={() => setActiveGroup("all")} type="button">
-                  All
-                </button>
-                {worldCupGroups.map((group) => (
-                  <button
-                    className={activeGroup === group.id ? "active" : ""}
-                    key={group.id}
-                    onClick={() => setActiveGroup(group.id)}
-                    type="button"
-                  >
-                    {group.id}
-                  </button>
-                ))}
+              <div className="match-filters">
+                <div className="filter-bar">
+                  <div className="filter-bar-heading">
+                    <strong>Team</strong>
+                    <span>{activeTeamFilter === "all" ? "All teams" : teamOptions.find((team) => team.code === activeTeamFilter)?.name}</span>
+                  </div>
+                  <div className="filter-tabs" aria-label="Filter matches by team">
+                    <button className={activeTeamFilter === "all" ? "active" : ""} onClick={() => setActiveTeamFilter("all")} type="button">
+                      All teams
+                    </button>
+                    {teamOptions.map((team) => (
+                      <button
+                        className={activeTeamFilter === team.code ? "active" : ""}
+                        key={team.code}
+                        onClick={() => setActiveTeamFilter(team.code)}
+                        type="button"
+                      >
+                        {team.flag} {team.name}
+                      </button>
+                    ))}
+                  </div>
+                </div>
+
+                <div className="filter-bar">
+                  <div className="filter-bar-heading">
+                    <strong>Date</strong>
+                    <span>
+                      {priorityCount > 0
+                        ? `${priorityCount} priority ${priorityCount === 1 ? "pick" : "picks"} in this view`
+                        : `${filteredMatches.length} ${filteredMatches.length === 1 ? "match" : "matches"} shown`}
+                    </span>
+                  </div>
+                  <div className="filter-tabs" aria-label="Filter matches by date">
+                    <button className={activeDateFilter === "all" ? "active" : ""} onClick={() => setActiveDateFilter("all")} type="button">
+                      All dates
+                    </button>
+                    <button className={activeDateFilter === "today" ? "active" : ""} onClick={() => setActiveDateFilter("today")} type="button">
+                      Today
+                    </button>
+                    {dateOptions.filter((dateKey) => dateKey !== todayKey).map((dateKey) => (
+                      <button className={activeDateFilter === dateKey ? "active" : ""} key={dateKey} onClick={() => setActiveDateFilter(dateKey)} type="button">
+                        {formatDateKey(dateKey)}
+                      </button>
+                    ))}
+                  </div>
+                </div>
+
+                <div className="quick-filters" aria-label="Quick match filters">
+                  <label>
+                    <input checked={showUpcomingOnly} onChange={(event) => setShowUpcomingOnly(event.target.checked)} type="checkbox" />
+                    <span>Show upcoming matches</span>
+                  </label>
+                  <label>
+                    <input checked={hideCompleted} onChange={(event) => setHideCompleted(event.target.checked)} type="checkbox" />
+                    <span>Hide completed games</span>
+                  </label>
+                </div>
               </div>
 
               {activeView === "group" ? (
                 <div className="group-view">
+                  {filteredMatches.length === 0 ? <p className="empty">No matches for these filters.</p> : null}
+
                   {visibleGroups.map((group) => {
-                    const groupMatches = matches.filter((match) => match.groupId === group.id);
+                    const groupMatches = filteredMatches.filter((match) => match.groupId === group.id);
                     return (
                       <section className="group-section" key={group.id}>
                         {renderGroupTable(group.id)}
@@ -891,36 +958,12 @@ export function WorldCupPredictor() {
                 </div>
               ) : (
                 <div className="date-view">
-                  <div className="date-filter-panel">
-                    <div>
-                      <strong>Date filter</strong>
-                      <span>
-                        {priorityCount > 0
-                          ? `${priorityCount} priority ${priorityCount === 1 ? "pick" : "picks"} in this view`
-                          : "No urgent picks in this view"}
-                      </span>
-                    </div>
-                    <div className="date-tabs" aria-label="Filter matches by date">
-                      <button className={activeDateFilter === "all" ? "active" : ""} onClick={() => setActiveDateFilter("all")} type="button">
-                        All dates
-                      </button>
-                      <button className={activeDateFilter === "today" ? "active" : ""} onClick={() => setActiveDateFilter("today")} type="button">
-                        Today
-                      </button>
-                      {dateOptions.filter((dateKey) => dateKey !== todayKey).map((dateKey) => (
-                        <button className={activeDateFilter === dateKey ? "active" : ""} key={dateKey} onClick={() => setActiveDateFilter(dateKey)} type="button">
-                          {formatDateKey(dateKey)}
-                        </button>
-                      ))}
-                    </div>
-                  </div>
-
-                  {dateFilteredMatches.length === 0 ? (
-                    <p className="empty">No matches for this date filter.</p>
+                  {filteredMatches.length === 0 ? (
+                    <p className="empty">No matches for these filters.</p>
                   ) : null}
 
-                  {dateFilteredMatches.map((match, index) => {
-                    const previousMatch = dateFilteredMatches[index - 1];
+                  {filteredMatches.map((match, index) => {
+                    const previousMatch = filteredMatches[index - 1];
                     const showDateHeading = index === 0 || formatMatchDate(previousMatch) !== formatMatchDate(match);
                     return (
                       <div className="date-match-block" key={match.id}>

@@ -397,8 +397,7 @@ h2 {
   justify-content: space-between;
 }
 
-.view-tabs,
-.group-tabs {
+.view-tabs {
   display: flex;
   flex-wrap: wrap;
   gap: 8px;
@@ -412,8 +411,7 @@ h2 {
   padding: 6px;
 }
 
-.view-tabs button,
-.group-tabs button {
+.view-tabs button {
   background: var(--surface-muted);
   border: 1px solid var(--line);
   border-radius: 8px;
@@ -428,35 +426,28 @@ h2 {
   flex: 1 1 150px;
 }
 
-.group-tabs button {
-  border-radius: 999px;
-  min-width: 44px;
-}
-
-.view-tabs button.active,
-.group-tabs button.active {
+.view-tabs button.active {
   background: var(--accent);
   border-color: var(--accent);
   color: #fff;
 }
 
-.group-view,
-.date-view,
-.group-section {
+.match-filters {
   display: grid;
-  gap: 16px;
+  gap: 12px;
+  margin-bottom: 18px;
 }
 
-.date-filter-panel {
+.filter-bar {
   background: #fbfcfc;
   border: 1px solid var(--line);
   border-radius: 8px;
   display: grid;
-  gap: 12px;
+  gap: 10px;
   padding: 12px;
 }
 
-.date-filter-panel > div:first-child {
+.filter-bar-heading {
   align-items: center;
   display: flex;
   flex-wrap: wrap;
@@ -464,34 +455,74 @@ h2 {
   justify-content: space-between;
 }
 
-.date-filter-panel span {
+.filter-bar-heading span {
   color: var(--muted);
   font-size: 0.84rem;
   font-weight: 800;
 }
 
-.date-tabs {
+.filter-tabs {
   display: flex;
-  flex-wrap: wrap;
   gap: 8px;
+  overflow-x: auto;
+  padding-bottom: 2px;
+  scrollbar-width: thin;
 }
 
-.date-tabs button {
+.filter-tabs button {
   background: var(--surface-muted);
   border: 1px solid var(--line);
   border-radius: 999px;
   color: var(--ink);
   cursor: pointer;
+  flex: 0 0 auto;
   font-size: 0.88rem;
   font-weight: 800;
   min-height: 34px;
   padding: 0 12px;
+  white-space: nowrap;
 }
 
-.date-tabs button.active {
+.filter-tabs button.active {
   background: var(--accent);
   border-color: var(--accent);
   color: #fff;
+}
+
+.quick-filters {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.quick-filters label {
+  align-items: center;
+  background: #fff;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  cursor: pointer;
+  display: inline-flex;
+  gap: 8px;
+  min-height: 40px;
+  padding: 0 12px;
+}
+
+.quick-filters input {
+  accent-color: var(--accent);
+  height: 16px;
+  width: 16px;
+}
+
+.quick-filters span {
+  font-size: 0.88rem;
+  font-weight: 800;
+}
+
+.group-view,
+.date-view,
+.group-section {
+  display: grid;
+  gap: 16px;
 }
 
 .date-match-block {
