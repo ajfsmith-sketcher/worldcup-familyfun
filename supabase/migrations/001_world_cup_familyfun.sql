@@ -7,6 +7,7 @@ create table if not exists public.players (
 
 create table if not exists public.matches (
   id text primary key,
+  match_number integer unique,
   group_id text not null,
   label text not null,
   home_code text not null,
@@ -15,6 +16,8 @@ create table if not exists public.matches (
   away_code text not null,
   away_name text not null,
   away_flag text not null,
+  venue text,
+  city text,
   kickoff_at timestamptz not null,
   home_score integer check (home_score >= 0),
   away_score integer check (away_score >= 0),

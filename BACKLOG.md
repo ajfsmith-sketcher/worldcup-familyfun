@@ -11,7 +11,7 @@ Last reviewed: 2026-06-08
 - Predictions are private until `matches.kickoff_at <= now()`.
 - Predictions lock two hours before kickoff.
 - Players sign in with Supabase magic links and create a display profile.
-- Group-stage match rows are seeded, but kickoff times are placeholders.
+- Group-stage match rows are seeded with official match numbers, kickoff times, venues, and cities.
 
 ## Needs Confirmation
 
@@ -51,22 +51,16 @@ Still to confirm: after kickoff, should all predictions become visible even befo
 
 ## Must Do Before Family Use
 
-### 4. Replace Placeholder Kickoff Times
+### 4. Verify Official Schedule Data
 
-Status: open
+Status: done
 
-All seeded matches currently use:
-
-```text
-2026-12-31 23:59:00+00
-```
-
-This intentionally keeps predictions private for now. Replace with official FIFA kickoff timestamps before inviting players.
+Official group-stage kickoff timestamps, venues, cities, and match numbers have been added.
 
 Notes:
-- This controls both prediction locking and reveal timing.
-- Use absolute UTC timestamps in Supabase.
-- Re-run privacy checks after updating.
+- Kickoff timestamps are stored as UTC.
+- This controls prediction locking, date filters, priority picks, and reveal timing.
+- Re-run privacy checks after any future FIFA schedule changes.
 
 ### 5. End-to-End Auth Test
 
@@ -158,17 +152,11 @@ Future work:
 - Store scorer rows from the provider if we want historical snapshots.
 - Decide whether scorer tracking is informational only or part of the family game.
 
-### 11. Replace Placeholder Fixture Schedule With Official Schedule
+### 11. Monitor Fixture Schedule Changes
 
 Status: proposed
 
-The current match order is generated from group teams, not an official date/time venue schedule.
-
-Future work:
-- Store official match numbers.
-- Add venues.
-- Add local-time display.
-- Sort by kickoff rather than generated group order.
+The official group-stage schedule has been loaded. Keep this item as a reminder to monitor for any FIFA venue/time adjustments before the tournament starts.
 
 ### 12. Family Invite / Access Model
 

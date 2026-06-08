@@ -692,12 +692,18 @@ h2 {
   margin-top: 8px;
 }
 
-.match-kickoff {
+.match-kickoff,
+.match-venue {
   color: var(--muted);
   display: block;
   font-size: 0.78rem;
   font-weight: 800;
   margin-top: 8px;
+}
+
+.match-venue {
+  font-weight: 700;
+  margin-top: 4px;
 }
 
 .match-lock.locked {

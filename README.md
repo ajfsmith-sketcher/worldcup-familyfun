@@ -35,7 +35,7 @@ The app can be backed by Supabase so predictions work across devices and family 
 The first migration in `supabase/migrations` creates:
 
 - `players`, linked to Supabase Auth users
-- `matches`, including `kickoff_at` and actual scores
+- `matches`, including official group-stage kickoffs, venues, cities, and actual scores
 - `predictions`, linked to players and matches
 
 Row-level security keeps each player's predictions private until the related match has kicked off:
@@ -51,8 +51,8 @@ NEXT_PUBLIC_SUPABASE_URL=
 NEXT_PUBLIC_SUPABASE_ANON_KEY=
 ```
 
-The match seed currently uses conservative placeholder kickoff times so predictions stay private. Replace
-`matches.kickoff_at` with official kickoff timestamps before opening the game broadly.
+The match seed includes the official group-stage schedule in UTC. Kickoff times drive prediction locking,
+date filters, priority picks, and prediction visibility.
 
 In Supabase Auth settings, set the site URL and allowed redirect URLs to your Vercel domain, for example:
 

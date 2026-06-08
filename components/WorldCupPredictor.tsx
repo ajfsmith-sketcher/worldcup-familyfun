@@ -22,7 +22,6 @@ type Player = {
 type MatchWithState = WorldCupMatch & {
   awayScore?: number | null;
   homeScore?: number | null;
-  kickoffAt?: string;
 };
 
 type MatchRow = {
@@ -30,6 +29,7 @@ type MatchRow = {
   away_flag: string;
   away_name: string;
   away_score: number | null;
+  city: string | null;
   group_id: GroupId;
   home_code: string;
   home_flag: string;
@@ -38,6 +38,8 @@ type MatchRow = {
   id: string;
   kickoff_at: string;
   label: string;
+  match_number: number | null;
+  venue: string | null;
 };
 
 type PlayerRow = {
@@ -232,13 +234,16 @@ const migratePlayers = (players: unknown): Player[] | null => {
 const rowToMatch = (row: MatchRow): MatchWithState => ({
   awayScore: row.away_score,
   awayTeam: { code: row.away_code, flag: row.away_flag, name: row.away_name },
+  city: row.city ?? "",
   groupId: row.group_id,
   homeScore: row.home_score,
   homeTeam: { code: row.home_code, flag: row.home_flag, name: row.home_name },
   id: row.id,
   kickoffAt: row.kickoff_at,
   label: row.label,
-  round: "Group stage"
+  matchNumber: row.match_number ?? Number(row.id.split("-")[1] ?? 0),
+  round: "Group stage",
+  venue: row.venue ?? ""
 });
 
 function TeamLine({ match }: { match: MatchWithState }) {
@@ -358,7 +363,7 @@ export function WorldCupPredictor() {
 
     const [playerResponse, matchResponse, predictionResponse] = await Promise.all([
       supabase.from("players").select("id, display_name").order("display_name"),
-      supabase.from("matches").select("*").order("id"),
+      supabase.from("matches").select("*").order("match_number", { nullsFirst: false }),
       supabase.from("predictions").select("player_id, match_id, home_score, away_score")
     ]);
 
@@ -659,6 +664,7 @@ export function WorldCupPredictor() {
           </div>
           <TeamLine match={match} />
           <small className="match-kickoff">{formatKickoff(match)}</small>
+          <small className="match-venue">{match.venue && match.city ? `${match.venue}, ${match.city}` : match.city || match.venue}</small>
           <small className={revealed ? "match-lock open" : locked ? "match-lock locked" : "match-lock"}>
             {revealed ? "Picks visible" : locked ? "Picks locked, visible at kickoff" : match.kickoffAt ? `Picks lock ${formatLockDeadline(match)}` : "Lock time TBC"}
           </small>
