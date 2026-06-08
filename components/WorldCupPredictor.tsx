@@ -30,14 +30,16 @@ import {
 } from "@/lib/worldCup2026";
 
 type ViewMode = "group" | "date";
-type WorkspaceTab = "picks" | "knockouts" | "scorers" | "family";
+type WorkspaceTab = "groups" | "knockouts" | "scorers" | "family";
 type DateFilter = "all" | "today" | string;
 type GroupFilter = "all" | GroupId;
 type TeamFilter = "all" | string;
 type SaveStatus = "idle" | "saving" | "saved" | "error";
 
 type Player = {
+  groupPredictionCount?: number;
   id: string;
+  knockoutPredictionCount?: number;
   matchPredictions: Record<string, ScorePick>;
   name: string;
   nextPendingCount?: number;
@@ -93,6 +95,8 @@ type PredictionRow = {
 };
 
 type PredictionStatusRow = {
+  group_prediction_count?: number;
+  knockout_prediction_count?: number;
   next_pending_count: number;
   player_id: string;
   prediction_count: number;
@@ -121,8 +125,10 @@ type SavedState = {
   activeTeamFilter: TeamFilter;
   activeView: ViewMode;
   hideCompleted: boolean;
+  filtersCollapsed: boolean;
   players: Player[];
   results: Record<string, ScorePick>;
+  showMissingOnly: boolean;
   showUpcomingOnly: boolean;
 };
 
@@ -374,13 +380,15 @@ export function WorldCupPredictor() {
   const [matches, setMatches] = useState<MatchWithState[]>(worldCupMatches);
   const [scorers, setScorers] = useState<ScorerRow[]>([]);
   const [activePlayerId, setActivePlayerId] = useState("");
-  const [activeWorkspaceTab, setActiveWorkspaceTab] = useState<WorkspaceTab>("picks");
+  const [activeWorkspaceTab, setActiveWorkspaceTab] = useState<WorkspaceTab>("groups");
   const [activeView, setActiveView] = useState<ViewMode>("group");
   const [activeDateFilter, setActiveDateFilter] = useState<DateFilter>("all");
   const [activeGroupFilter, setActiveGroupFilter] = useState<GroupFilter>("all");
   const [activeTeamFilter, setActiveTeamFilter] = useState<TeamFilter>("all");
   const [showUpcomingOnly, setShowUpcomingOnly] = useState(false);
   const [hideCompleted, setHideCompleted] = useState(false);
+  const [showMissingOnly, setShowMissingOnly] = useState(false);
+  const [filtersCollapsed, setFiltersCollapsed] = useState(false);
   const [results, setResults] = useState<Record<string, ScorePick>>(emptyMatchScores);
   const [predictionSaveStatus, setPredictionSaveStatus] = useState<Record<string, PredictionSaveState>>({});
   const [newPlayerName, setNewPlayerName] = useState("");
@@ -411,6 +419,8 @@ export function WorldCupPredictor() {
             setActiveTeamFilter(typeof parsed.activeTeamFilter === "string" ? parsed.activeTeamFilter : "all");
             setShowUpcomingOnly(Boolean(parsed.showUpcomingOnly));
             setHideCompleted(Boolean(parsed.hideCompleted));
+            setShowMissingOnly(Boolean(parsed.showMissingOnly));
+            setFiltersCollapsed(Boolean(parsed.filtersCollapsed));
             setResults({
             ...emptyMatchScores(),
             ...(parsed.results && typeof parsed.results === "object" ? parsed.results : {})
@@ -468,6 +478,8 @@ export function WorldCupPredictor() {
       id: player.id,
       matchPredictions: emptyMatchScores(sharedMatches),
       name: player.display_name,
+      groupPredictionCount: statusByPlayerId.get(player.id)?.group_prediction_count,
+      knockoutPredictionCount: statusByPlayerId.get(player.id)?.knockout_prediction_count,
       nextPendingCount: statusByPlayerId.get(player.id)?.next_pending_count ?? 0,
       predictionCount: statusByPlayerId.get(player.id)?.prediction_count ?? 0
     }));
@@ -547,13 +559,15 @@ export function WorldCupPredictor() {
         activePlayerId,
         activeTeamFilter,
         activeView,
+        filtersCollapsed,
         hideCompleted,
         players,
         results,
+        showMissingOnly,
         showUpcomingOnly
       })
     );
-  }, [activeDateFilter, activeGroupFilter, activePlayerId, activeTeamFilter, activeView, hideCompleted, isLoaded, players, results, showUpcomingOnly]);
+  }, [activeDateFilter, activeGroupFilter, activePlayerId, activeTeamFilter, activeView, filtersCollapsed, hideCompleted, isLoaded, players, results, showMissingOnly, showUpcomingOnly]);
 
   const activePlayer = players.find((player) => player.id === activePlayerId) ?? players[0];
   const todayKey = toDateKey(new Date());
@@ -585,21 +599,32 @@ export function WorldCupPredictor() {
       const matchesDate =
         activeDateFilter === "all" || (activeDateFilter === "today" ? isTodayMatch(match) : matchDateKey(match) === activeDateFilter);
       const matchesCompleted = !hideCompleted || !hasCompletedResult(match, results);
-      return matchesTeam && matchesGroup && matchesDate && matchesCompleted;
+      const matchesMissing = !showMissingOnly || !hasScore(activePlayer?.matchPredictions[match.id]);
+      return matchesTeam && matchesGroup && matchesDate && matchesCompleted && matchesMissing;
     });
 
     if (!showUpcomingOnly) return nextMatches;
     return nextMatches.filter(isUpcomingMatch).slice(0, NEXT_UPCOMING_MATCH_COUNT);
-  }, [activeDateFilter, activeGroupFilter, activeTeamFilter, groupStageMatchList, hideCompleted, results, showUpcomingOnly]);
+  }, [activeDateFilter, activeGroupFilter, activePlayer?.matchPredictions, activeTeamFilter, groupStageMatchList, hideCompleted, results, showMissingOnly, showUpcomingOnly]);
+  const filteredKnockoutMatches = useMemo(() => {
+    const nextMatches = sortMatchesByKickoff(knockoutMatchList).filter((match) => {
+      const matchesCompleted = !hideCompleted || !hasCompletedResult(match, results);
+      const matchesMissing = !showMissingOnly || !hasScore(activePlayer?.matchPredictions[match.id]);
+      return matchesCompleted && matchesMissing;
+    });
+
+    if (!showUpcomingOnly) return nextMatches;
+    return nextMatches.filter(isUpcomingMatch).slice(0, NEXT_UPCOMING_MATCH_COUNT);
+  }, [activePlayer?.matchPredictions, hideCompleted, knockoutMatchList, results, showMissingOnly, showUpcomingOnly]);
   const knockoutMatchesByRound = useMemo(
     () =>
       knockoutRounds
         .map((round) => ({
-          matches: sortMatchesByKickoff(knockoutMatchList).filter((match) => match.round === round),
+          matches: filteredKnockoutMatches.filter((match) => match.round === round),
           round
         }))
         .filter((section) => section.matches.length > 0),
-    [knockoutMatchList]
+    [filteredKnockoutMatches]
   );
   const priorityCount = useMemo(
     () => filteredMatches.filter((match) => isPriorityPick(match, activePlayer?.matchPredictions[match.id])).length,
@@ -608,6 +633,8 @@ export function WorldCupPredictor() {
   const nextMatches = useMemo(() => nextKickoffMatches(matches), [matches]);
   const visibleGroups = worldCupGroups.filter((group) => filteredMatches.some((match) => match.groupId === group.id));
   const resultCount = completedCount(results, matches);
+  const activeGroupPickCount = activePlayer ? completedCount(activePlayer.matchPredictions, groupStageMatchList) : 0;
+  const activeKnockoutPickCount = activePlayer ? completedCount(activePlayer.matchPredictions, knockoutMatchList) : 0;
 
   const standings = useMemo(
     () =>
@@ -617,12 +644,16 @@ export function WorldCupPredictor() {
           completion:
             typeof player.predictionCount === "number" ? Math.round((player.predictionCount / matches.length) * 100) : completion(player.matchPredictions, matches),
           exactScores: matches.filter((match) => matchPoints(player.matchPredictions[match.id], results[match.id]) === 3).length,
+          groupPickCount:
+            typeof player.groupPredictionCount === "number" ? player.groupPredictionCount : completedCount(player.matchPredictions, groupStageMatchList),
           hasNextPending: Boolean(player.nextPendingCount),
+          knockoutPickCount:
+            typeof player.knockoutPredictionCount === "number" ? player.knockoutPredictionCount : completedCount(player.matchPredictions, knockoutMatchList),
           pickCount: typeof player.predictionCount === "number" ? player.predictionCount : completedCount(player.matchPredictions, matches),
           score: scorePlayer(player, results, matches)
         }))
         .sort((a, b) => b.score - a.score || b.exactScores - a.exactScores || b.completion - a.completion || a.name.localeCompare(b.name)),
-    [matches, players, results]
+    [groupStageMatchList, knockoutMatchList, matches, players, results]
   );
 
   const signIn = async () => {
@@ -684,6 +715,8 @@ export function WorldCupPredictor() {
           player.id === session.user.id
             ? {
                 ...player,
+                groupPredictionCount: completedCount(player.matchPredictions, groupStageMatchList),
+                knockoutPredictionCount: completedCount(player.matchPredictions, knockoutMatchList),
                 nextPendingCount: nextPendingCount(player.matchPredictions, matches),
                 predictionCount: completedCount(player.matchPredictions, matches)
               }
@@ -813,6 +846,8 @@ export function WorldCupPredictor() {
     setActiveTeamFilter("all");
     setShowUpcomingOnly(false);
     setHideCompleted(false);
+    setShowMissingOnly(false);
+    setFiltersCollapsed(false);
     setResults(emptyMatchScores());
   };
 
@@ -1024,8 +1059,8 @@ export function WorldCupPredictor() {
       {(!isSupabaseConfigured || (session && profileReady && activePlayer)) && (
         <>
           <div className="view-tabs workspace-tabs" aria-label="Choose app section">
-            <button className={activeWorkspaceTab === "picks" ? "active" : ""} onClick={() => setActiveWorkspaceTab("picks")} type="button">
-              Picks
+            <button className={activeWorkspaceTab === "groups" ? "active" : ""} onClick={() => setActiveWorkspaceTab("groups")} type="button">
+              Group games
             </button>
             <button className={activeWorkspaceTab === "knockouts" ? "active" : ""} onClick={() => setActiveWorkspaceTab("knockouts")} type="button">
               Knockouts
@@ -1107,7 +1142,10 @@ export function WorldCupPredictor() {
                   <span>
                     <strong>{player.name}</strong>
                     <small>
-                      {player.pickCount} / {matches.length} picked · {player.exactScores} exact
+                      Group {player.groupPickCount} / {groupStageMatchList.length} · Knockout {player.knockoutPickCount} / {knockoutMatchList.length}
+                    </small>
+                    <small>
+                      Total {player.pickCount} / {matches.length} picked · {player.exactScores} exact
                     </small>
                     {player.hasNextPending ? (
                       <small className="attention-copy">
@@ -1149,15 +1187,15 @@ export function WorldCupPredictor() {
             ) : null}
 
           <div className="predictor-main">
-            {activeWorkspaceTab === "picks" ? (
+            {activeWorkspaceTab === "groups" ? (
               <section className="panel match-panel">
               <div className="section-heading">
                 <div>
-                  <p className="eyebrow">Prediction sheet</p>
-                  <h2>{activePlayer?.name}&apos;s match picks</h2>
+                  <p className="eyebrow">Group-stage picks</p>
+                  <h2>{activePlayer?.name}&apos;s group game picks</h2>
                 </div>
                 <span className="badge ok">
-                  {activePlayer ? completedCount(activePlayer.matchPredictions, matches) : 0} / {matches.length} picked
+                  {activeGroupPickCount} / {groupStageMatchList.length} picked
                 </span>
               </div>
 
@@ -1171,50 +1209,61 @@ export function WorldCupPredictor() {
               </div>
 
               <div className="match-filters">
-                <div className="filter-select-grid">
-                  <label>
-                    <span>Group</span>
-                    <select
-                      aria-label="Filter matches by group"
-                      onChange={(event) => setActiveGroupFilter(event.target.value as GroupFilter)}
-                      value={activeGroupFilter}
-                    >
-                      <option value="all">All groups</option>
-                      {worldCupGroups.map((group) => (
-                        <option key={group.id} value={group.id}>
-                          Group {group.id}
-                        </option>
-                      ))}
-                    </select>
-                  </label>
-
-                  <label>
-                    <span>Team</span>
-                    <select aria-label="Filter matches by team" onChange={(event) => setActiveTeamFilter(event.target.value)} value={activeTeamFilter}>
-                      <option value="all">All teams</option>
-                      {teamOptions.map((team) => (
-                        <option key={team.code} value={team.code}>
-                          {team.name}
-                        </option>
-                      ))}
-                    </select>
-                  </label>
-
-                  <label>
-                    <span>Date</span>
-                    <select aria-label="Filter matches by date" onChange={(event) => setActiveDateFilter(event.target.value)} value={activeDateFilter}>
-                      <option value="all">All dates</option>
-                      <option value="today">Today</option>
-                      {dateOptions.filter((dateKey) => dateKey !== todayKey).map((dateKey) => (
-                        <option key={dateKey} value={dateKey}>
-                          {formatDateKey(dateKey)}
-                        </option>
-                      ))}
-                    </select>
-                  </label>
+                <div className="filter-header">
+                  <strong>Filters</strong>
+                  <button className="text-button" onClick={() => setFiltersCollapsed((current) => !current)} type="button">
+                    {filtersCollapsed ? "Show filters" : "Hide filters"}
+                  </button>
                 </div>
+                {!filtersCollapsed ? (
+                  <div className="filter-select-grid">
+                    <label>
+                      <span>Group</span>
+                      <select
+                        aria-label="Filter matches by group"
+                        onChange={(event) => setActiveGroupFilter(event.target.value as GroupFilter)}
+                        value={activeGroupFilter}
+                      >
+                        <option value="all">All groups</option>
+                        {worldCupGroups.map((group) => (
+                          <option key={group.id} value={group.id}>
+                            Group {group.id}
+                          </option>
+                        ))}
+                      </select>
+                    </label>
 
+                    <label>
+                      <span>Team</span>
+                      <select aria-label="Filter matches by team" onChange={(event) => setActiveTeamFilter(event.target.value)} value={activeTeamFilter}>
+                        <option value="all">All teams</option>
+                        {teamOptions.map((team) => (
+                          <option key={team.code} value={team.code}>
+                            {team.name}
+                          </option>
+                        ))}
+                      </select>
+                    </label>
+
+                    <label>
+                      <span>Date</span>
+                      <select aria-label="Filter matches by date" onChange={(event) => setActiveDateFilter(event.target.value)} value={activeDateFilter}>
+                        <option value="all">All dates</option>
+                        <option value="today">Today</option>
+                        {dateOptions.filter((dateKey) => dateKey !== todayKey).map((dateKey) => (
+                          <option key={dateKey} value={dateKey}>
+                            {formatDateKey(dateKey)}
+                          </option>
+                        ))}
+                      </select>
+                    </label>
+                  </div>
+                ) : null}
                 <div className="quick-filters" aria-label="Quick match filters">
+                  <label>
+                    <input checked={showMissingOnly} onChange={(event) => setShowMissingOnly(event.target.checked)} type="checkbox" />
+                    <span>Missing my scores</span>
+                  </label>
                   <label>
                     <input checked={showUpcomingOnly} onChange={(event) => setShowUpcomingOnly(event.target.checked)} type="checkbox" />
                     <span>Next {NEXT_UPCOMING_MATCH_COUNT} upcoming games</span>
@@ -1227,7 +1276,7 @@ export function WorldCupPredictor() {
                 <p className="filter-summary">
                   {priorityCount > 0
                     ? `${priorityCount} priority ${priorityCount === 1 ? "pick" : "picks"} in this view`
-                    : `${filteredMatches.length} ${filteredMatches.length === 1 ? "match" : "matches"} shown`}
+                    : `${filteredMatches.length} of ${groupStageMatchList.length} group ${filteredMatches.length === 1 ? "match" : "matches"} shown`}
                 </p>
               </div>
 
@@ -1282,13 +1331,33 @@ export function WorldCupPredictor() {
                     <h2>{activePlayer?.name}&apos;s knockout picks</h2>
                   </div>
                   <span className="badge ok">
-                    {activePlayer ? completedCount(activePlayer.matchPredictions, knockoutMatchList) : 0} / {knockoutMatchList.length} picked
+                    {activeKnockoutPickCount} / {knockoutMatchList.length} picked
                   </span>
                 </div>
                 <p className="muted-copy">
                   Knockout teams are shown as bracket slots until the tournament fills them in. You can still pick scores now and revise them until one hour before kickoff.
                 </p>
+                <div className="match-filters compact">
+                  <div className="quick-filters" aria-label="Quick knockout filters">
+                    <label>
+                      <input checked={showMissingOnly} onChange={(event) => setShowMissingOnly(event.target.checked)} type="checkbox" />
+                      <span>Missing my scores</span>
+                    </label>
+                    <label>
+                      <input checked={showUpcomingOnly} onChange={(event) => setShowUpcomingOnly(event.target.checked)} type="checkbox" />
+                      <span>Next {NEXT_UPCOMING_MATCH_COUNT} upcoming games</span>
+                    </label>
+                    <label>
+                      <input checked={hideCompleted} onChange={(event) => setHideCompleted(event.target.checked)} type="checkbox" />
+                      <span>Hide completed games</span>
+                    </label>
+                  </div>
+                  <p className="filter-summary">
+                    {filteredKnockoutMatches.length} of {knockoutMatchList.length} knockout {filteredKnockoutMatches.length === 1 ? "match" : "matches"} shown
+                  </p>
+                </div>
                 <div className="group-view">
+                  {filteredKnockoutMatches.length === 0 ? <p className="empty">No knockout matches for these filters.</p> : null}
                   {knockoutMatchesByRound.map((section) => (
                     <section className="group-section" key={section.round}>
                       <div className="group-table-title">

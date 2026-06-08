@@ -527,6 +527,21 @@ h2 {
   padding: 12px;
 }
 
+.match-filters.compact {
+  margin-top: 16px;
+}
+
+.filter-header {
+  align-items: center;
+  display: flex;
+  gap: 12px;
+  justify-content: space-between;
+}
+
+.filter-header strong {
+  color: var(--ink);
+}
+
 .filter-select-grid {
   display: grid;
   gap: 10px;

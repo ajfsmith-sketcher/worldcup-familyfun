@@ -18,6 +18,7 @@ Last reviewed: 2026-06-08
 - Automated tests cover scoring, lock timing, reveal timing, completion, and next-match logic.
 - Knockout rounds are available as bracket-placeholder fixtures.
 - A scorers tab is available and wired to provider-synced scorer data.
+- Group-stage and knockout predictions are split into separate tabs and progress counts.
 
 ## Needs Confirmation
 
@@ -327,3 +328,4 @@ Do not run `npm audit fix --force` blindly. Review whether the affected packages
 - Added cron-safe score sync route and Vercel hourly cron config.
 - Added knockout-round fixtures and a Knockouts tab.
 - Added tournament scorer storage, sync attempt, and Scorers tab.
+- Split group-game and knockout prediction progress, added collapsible filters, and added missing-score quick filters.
