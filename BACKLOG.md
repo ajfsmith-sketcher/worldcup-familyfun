@@ -254,10 +254,12 @@ Status: proposed
 
 Add coverage for:
 
-- Exact-score scoring.
-- Correct-winner scoring.
+- Home-score scoring.
+- Away-score scoring.
+- Correct-result scoring.
 - Draw outcome scoring.
-- Locking rules before/after the two-hour cutoff.
+- Amber warning two hours before kickoff.
+- Locking rules before/after the one-hour cutoff.
 - Supabase row mapping.
 
 ### 20. Dependency Audit

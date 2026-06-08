@@ -116,8 +116,11 @@ const outcome = (score: ScorePick | undefined) => {
 
 const matchPoints = (prediction: ScorePick | undefined, result: ScorePick | undefined) => {
   if (!hasScore(prediction) || !hasScore(result)) return 0;
-  if (prediction?.home === result?.home && prediction?.away === result?.away) return 3;
-  return outcome(prediction) === outcome(result) ? 1 : 0;
+  return (
+    Number(prediction?.home === result?.home) +
+    Number(prediction?.away === result?.away) +
+    Number(outcome(prediction) === outcome(result))
+  );
 };
 
 const completedCount = (scores: Record<string, ScorePick>, matches: MatchWithState[] = worldCupMatches) =>
@@ -789,8 +792,8 @@ export function WorldCupPredictor() {
           <p className="eyebrow">Family World Cup pool</p>
           <h1>World Cup 2026 predictor</h1>
           <p className="lede">
-            Pick the score for every group-stage game. Exact scorelines earn 3 points; the right winner, including a
-            draw, earns 1 point. Picks turn amber two hours before kickoff, lock one hour before kickoff, and stay private until the match starts.
+            Pick the score for every group-stage game. Earn 1 point for the home score, 1 for the away score, and 1 for
+            the match result. Picks turn amber two hours before kickoff, lock one hour before kickoff, and stay private until the match starts.
           </p>
           <div className="action-row predictor-actions">
             <button className="button secondary" onClick={resetGame} type="button">

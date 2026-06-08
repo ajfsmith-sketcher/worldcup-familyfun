@@ -148,9 +148,9 @@ export const worldCupGroups: WorldCupGroup[] = [
 ];
 
 export const scoringRules = [
-  { label: "Exact score", points: 3 },
-  { label: "Correct winner or draw", points: 1 },
-  { label: "Wrong outcome", points: 0 }
+  { label: "Home score correct", points: 1 },
+  { label: "Away score correct", points: 1 },
+  { label: "Correct result", points: 1 }
 ] as const;
 
 const teamByCode = new Map(worldCupGroups.flatMap((group) => group.teams.map((team) => [team.code, team])));

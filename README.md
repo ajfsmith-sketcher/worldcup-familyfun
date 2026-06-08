@@ -4,9 +4,9 @@ A private family score predictor for the FIFA World Cup 2026.
 
 Players predict the score for each group-stage match. The leaderboard awards:
 
-- 3 points for the exact scoreline
-- 1 point for the correct winner, including a draw
-- 0 points for a wrong outcome
+- 1 point for the correct home-team score
+- 1 point for the correct away-team score
+- 1 point for the correct match result, including a draw
 
 In production, predictions and results are stored in Supabase. The app can still fall back to browser `localStorage`
 when Supabase environment variables are not configured.
