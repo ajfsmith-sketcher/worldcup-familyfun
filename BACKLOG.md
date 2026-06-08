@@ -133,7 +133,7 @@ Confirm actual score entry works only for an admin user:
 
 ### 10. Source Actual Scores Automatically
 
-Status: proposed - candidate API identified
+Status: partially implemented
 
 Candidate: football-data.org
 
@@ -151,14 +151,16 @@ Why it looks promising:
 Caveats:
 - Free-plan scores are delayed.
 - Live scores appear to require the paid "Free w/ Livescores" plan.
+- Odds are captured when the provider returns them, but may be null or plan-dependent.
 - The API token must stay server-side, not in frontend code.
 - Manual admin score editing should remain as a fallback.
 
 Implementation notes:
-- Get a football-data.org API token.
+- Get a football-data.org API token and set `FOOTBALL_DATA_API_TOKEN` in Vercel.
+- Set `SUPABASE_SERVICE_ROLE_KEY` in Vercel for the server-side sync route.
 - Test `GET https://api.football-data.org/v4/competitions/WC/matches?season=2026` once 2026 fixtures/results are available.
-- Add external mapping fields to `matches`, such as `external_provider`, `external_match_id`, and `last_synced_at`.
-- Add a protected `/api/sync-scores` route that pulls scores and writes actual scores into Supabase.
+- External mapping fields and odds fields have been added to `matches`.
+- A protected `/api/sync-scores` route pulls scores/odds and writes actual scores into Supabase for admin users.
 - Add Vercel Cron to run syncs more frequently on matchdays.
 - Keep a small audit trail or timestamp so we can see when scores were last updated.
 

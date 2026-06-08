@@ -585,7 +585,7 @@ h2 {
   align-items: center;
   display: grid;
   gap: 8px;
-  grid-template-columns: minmax(150px, 1fr) repeat(6, minmax(34px, 44px));
+  grid-template-columns: minmax(150px, 1fr) minmax(72px, 96px) repeat(6, minmax(34px, 44px));
   padding: 9px 12px;
 }
 
@@ -779,7 +779,8 @@ h2 {
 }
 
 .match-kickoff,
-.match-venue {
+.match-venue,
+.match-odds {
   color: var(--muted);
   display: block;
   font-size: 0.78rem;
@@ -789,6 +790,12 @@ h2 {
 
 .match-venue {
   font-weight: 700;
+  margin-top: 4px;
+}
+
+.match-odds {
+  color: var(--accent-strong);
+  font-weight: 800;
   margin-top: 4px;
 }
 
@@ -864,7 +871,7 @@ h2 {
 
   .group-table-head,
   .group-table-row {
-    min-width: 520px;
+    min-width: 620px;
   }
 
   .predictor-sidebar {

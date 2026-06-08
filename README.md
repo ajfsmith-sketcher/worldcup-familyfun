@@ -50,7 +50,12 @@ Create a dedicated Supabase project for this app, apply the migrations, then add
 ```bash
 NEXT_PUBLIC_SUPABASE_URL=
 NEXT_PUBLIC_SUPABASE_ANON_KEY=
+SUPABASE_SERVICE_ROLE_KEY=
+FOOTBALL_DATA_API_TOKEN=
 ```
+
+`SUPABASE_SERVICE_ROLE_KEY` and `FOOTBALL_DATA_API_TOKEN` are server-only values used by the admin score-sync route.
+Do not expose them with `NEXT_PUBLIC_`.
 
 The match seed includes the official group-stage schedule in UTC. Kickoff times drive prediction locking,
 date filters, priority picks, and prediction visibility.

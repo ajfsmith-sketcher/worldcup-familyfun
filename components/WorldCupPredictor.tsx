@@ -27,6 +27,13 @@ type Player = {
 type MatchWithState = WorldCupMatch & {
   awayScore?: number | null;
   homeScore?: number | null;
+  lastSyncedAt?: string | null;
+  odds?: {
+    awayWin?: number | null;
+    draw?: number | null;
+    homeWin?: number | null;
+  };
+  scoreStatus?: string | null;
 };
 
 type MatchRow = {
@@ -44,6 +51,11 @@ type MatchRow = {
   kickoff_at: string;
   label: string;
   match_number: number | null;
+  last_synced_at: string | null;
+  odds_away_win: number | null;
+  odds_draw: number | null;
+  odds_home_win: number | null;
+  score_status: string | null;
   venue: string | null;
 };
 
@@ -157,6 +169,8 @@ const formatLockDeadline = (match: MatchWithState) =>
     ? new Intl.DateTimeFormat("en-GB", { dateStyle: "medium", timeStyle: "short" }).format(new Date(new Date(match.kickoffAt).getTime() - PREDICTION_LOCK_MS))
     : "Lock TBC";
 
+const formatOdds = (value: number | null | undefined) => (typeof value === "number" ? value.toFixed(2) : "-");
+
 const matchTime = (match: MatchWithState) => (match.kickoffAt ? new Date(match.kickoffAt).getTime() : Number.MAX_SAFE_INTEGER);
 
 const sortMatchesByKickoff = (currentMatches: MatchWithState[]) =>
@@ -170,6 +184,21 @@ const nextKickoffMatches = (currentMatches: MatchWithState[]) => {
 
 const nextPendingCount = (scores: Record<string, ScorePick>, currentMatches: MatchWithState[]) =>
   nextKickoffMatches(currentMatches).filter((match) => !hasScore(scores[match.id])).length;
+
+const teamLatestResult = (teamCode: string, currentMatches: MatchWithState[], results: Record<string, ScorePick>) => {
+  const latestMatch = sortMatchesByKickoff(currentMatches)
+    .filter((match) => (match.homeTeam.code === teamCode || match.awayTeam.code === teamCode) && hasScore(results[match.id]))
+    .pop();
+  if (!latestMatch) return "-";
+
+  const score = results[latestMatch.id];
+  const teamWasHome = latestMatch.homeTeam.code === teamCode;
+  const teamScore = Number(teamWasHome ? score.home : score.away);
+  const opponentScore = Number(teamWasHome ? score.away : score.home);
+  const opponentCode = teamWasHome ? latestMatch.awayTeam.code : latestMatch.homeTeam.code;
+  const result = teamScore > opponentScore ? "W" : teamScore < opponentScore ? "L" : "D";
+  return `${result} ${teamScore}-${opponentScore} ${opponentCode}`;
+};
 
 const formatMatchDate = (match: MatchWithState) =>
   match.kickoffAt ? new Intl.DateTimeFormat("en-GB", { dateStyle: "full" }).format(new Date(match.kickoffAt)) : "Kickoff TBC";
@@ -282,8 +311,15 @@ const rowToMatch = (row: MatchRow): MatchWithState => ({
   id: row.id,
   kickoffAt: row.kickoff_at,
   label: row.label,
+  lastSyncedAt: row.last_synced_at,
   matchNumber: row.match_number ?? Number(row.id.split("-")[1] ?? 0),
+  odds: {
+    awayWin: row.odds_away_win,
+    draw: row.odds_draw,
+    homeWin: row.odds_home_win
+  },
   round: "Group stage",
+  scoreStatus: row.score_status,
   venue: row.venue ?? ""
 });
 
@@ -375,6 +411,8 @@ export function WorldCupPredictor() {
   const [profileName, setProfileName] = useState("");
   const [authMessage, setAuthMessage] = useState("");
   const [syncMessage, setSyncMessage] = useState("");
+  const [scoreSyncMessage, setScoreSyncMessage] = useState("");
+  const [isSyncingScores, setIsSyncingScores] = useState(false);
   const [profileReady, setProfileReady] = useState(!isSupabaseConfigured);
 
   const isAdmin = session?.user.app_metadata?.role === "admin";
@@ -663,6 +701,36 @@ export function WorldCupPredictor() {
     setSyncMessage(error ? error.message : "Actual score saved.");
   };
 
+  const syncScores = async () => {
+    if (!supabase || !session) return;
+    setIsSyncingScores(true);
+    setScoreSyncMessage("Syncing scores...");
+    const { data } = await supabase.auth.getSession();
+    const accessToken = data.session?.access_token;
+    if (!accessToken) {
+      setScoreSyncMessage("Sign in again before syncing scores.");
+      setIsSyncingScores(false);
+      return;
+    }
+
+    const response = await fetch("/api/sync-scores", {
+      method: "POST",
+      headers: {
+        Authorization: `Bearer ${accessToken}`
+      }
+    });
+    const payload = (await response.json()) as { error?: string; matched?: number; unmatched?: unknown[]; updated?: number };
+    if (!response.ok) {
+      setScoreSyncMessage(payload.error ?? "Could not sync scores.");
+      setIsSyncingScores(false);
+      return;
+    }
+
+    await loadSharedState(session);
+    setScoreSyncMessage(`Scores synced. Updated ${payload.updated ?? 0} of ${payload.matched ?? 0} matched fixtures.`);
+    setIsSyncingScores(false);
+  };
+
   const updateActiveMatchScore = (matchId: string, score: ScorePick) => {
     if (!activePlayer) return;
     const match = matches.find((item) => item.id === matchId);
@@ -742,6 +810,7 @@ export function WorldCupPredictor() {
         <div className="group-table" aria-label={`Group ${groupId} table`}>
           <div className="group-table-head">
             <span>Team</span>
+            <span>Last</span>
             <span>P</span>
             <span>W</span>
             <span>D</span>
@@ -754,6 +823,7 @@ export function WorldCupPredictor() {
               <span>
                 {row.team.flag} {row.team.name}
               </span>
+              <span>{teamLatestResult(row.team.code, matches, results)}</span>
               <span>{row.played}</span>
               <span>{row.won}</span>
               <span>{row.drawn}</span>
@@ -797,6 +867,12 @@ export function WorldCupPredictor() {
           <TeamLine match={match} />
           <small className="match-kickoff">{formatKickoff(match)}</small>
           <small className="match-venue">{match.venue && match.city ? `${match.venue}, ${match.city}` : match.city || match.venue}</small>
+          {match.odds?.homeWin || match.odds?.draw || match.odds?.awayWin ? (
+            <small className="match-odds">
+              Odds: {match.homeTeam.code} {formatOdds(match.odds.homeWin)} · Draw {formatOdds(match.odds.draw)} · {match.awayTeam.code}{" "}
+              {formatOdds(match.odds.awayWin)}
+            </small>
+          ) : null}
           <small className={revealed ? "match-lock open" : locked ? "match-lock locked" : "match-lock"}>
             {revealed ? "Picks visible" : locked ? "Picks locked, visible at kickoff" : match.kickoffAt ? `Picks lock ${formatLockDeadline(match)}` : "Lock time TBC"}
           </small>
@@ -914,6 +990,11 @@ export function WorldCupPredictor() {
               <div className="sync-card">
                 <strong>{session?.user.email}</strong>
                 <span>Shared Supabase game</span>
+                {isAdmin ? (
+                  <button className="text-button" disabled={isSyncingScores} onClick={syncScores} type="button">
+                    {isSyncingScores ? "Syncing..." : "Sync scores"}
+                  </button>
+                ) : null}
                 <button className="text-button" onClick={signOut} type="button">
                   Sign out
                 </button>
@@ -970,6 +1051,7 @@ export function WorldCupPredictor() {
               ))}
             </div>
             {syncMessage ? <p className="sync-message">{syncMessage}</p> : null}
+            {scoreSyncMessage ? <p className="sync-message">{scoreSyncMessage}</p> : null}
           </aside>
 
           <div className="predictor-main">
