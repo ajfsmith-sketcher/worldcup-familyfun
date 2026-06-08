@@ -831,6 +831,34 @@ h2 {
   color: var(--warning);
 }
 
+.revealed-picks {
+  background: #fff;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  display: grid;
+  gap: 8px;
+  grid-column: 1 / -1;
+  padding: 10px;
+}
+
+.revealed-picks > div {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.revealed-picks span {
+  background: var(--surface-muted);
+  border: 1px solid var(--line);
+  border-radius: 999px;
+  color: var(--ink);
+  display: inline-flex;
+  font-size: 0.82rem;
+  font-weight: 800;
+  min-height: 30px;
+  padding: 6px 10px;
+}
+
 .prediction-summary {
   display: grid;
   grid-template-columns: repeat(3, minmax(0, 1fr));

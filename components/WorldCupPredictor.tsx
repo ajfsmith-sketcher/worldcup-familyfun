@@ -863,6 +863,15 @@ export function WorldCupPredictor() {
     const needsPick = !hasScore(predictedScore) && !locked;
     const priorityPick = isPriorityPick(match, predictedScore);
     const rowState = locked ? "locked" : lockWarning ? "lock-warning" : priorityPick ? "priority" : needsPick ? "needs-pick" : "";
+    const revealedPicks = players
+      .map((player) => ({
+        id: player.id,
+        name: player.name,
+        points: matchPoints(player.matchPredictions[match.id], actualScore),
+        score: normalizeScore(player.matchPredictions[match.id])
+      }))
+      .filter((pick) => hasScore(pick.score))
+      .sort((a, b) => b.points - a.points || a.name.localeCompare(b.name));
 
     return (
       <article className={`match-row ${rowState}`} key={match.id}>
@@ -907,6 +916,23 @@ export function WorldCupPredictor() {
           score={actualScore}
         />
         <strong className={`match-points ${points === 3 ? "exact" : points === 1 ? "outcome" : ""}`}>{points}</strong>
+        {revealed ? (
+          <div className="revealed-picks">
+            <strong>Family picks</strong>
+            {revealedPicks.length > 0 ? (
+              <div>
+                {revealedPicks.map((pick) => (
+                  <span key={pick.id}>
+                    {pick.name}: {pick.score.home}-{pick.score.away}
+                    {hasScore(actualScore) ? ` (${pick.points} pts)` : ""}
+                  </span>
+                ))}
+              </div>
+            ) : (
+              <span>No saved picks for this match.</span>
+            )}
+          </div>
+        ) : null}
       </article>
     );
   };
