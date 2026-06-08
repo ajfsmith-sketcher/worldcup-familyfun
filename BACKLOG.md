@@ -9,7 +9,7 @@ Last reviewed: 2026-06-08
 - Supabase project `world-cup-family-fun` is connected through Vercel environment variables.
 - Supabase schema is live with RLS for players, matches, and predictions.
 - Predictions are private until `matches.kickoff_at <= now()`.
-- Predictions lock two hours before kickoff.
+- Predictions turn amber two hours before kickoff and lock one hour before kickoff.
 - Players sign in with Supabase magic links and create a display profile.
 - Group-stage match rows are seeded with official match numbers, kickoff times, venues, and cities.
 
@@ -45,7 +45,7 @@ Status: mostly confirmed
 
 Chosen rule: everyone’s predictions are private until kickoff.
 
-Chosen rule: prediction entry locks two hours before kickoff.
+Chosen rule: prediction entry turns amber two hours before kickoff and locks one hour before kickoff.
 
 Still to confirm: after kickoff, should all predictions become visible even before full-time, or only after the match finishes?
 

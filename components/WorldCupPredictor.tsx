@@ -75,7 +75,8 @@ type SavedState = {
 };
 
 const STORAGE_KEY = "world-cup-2026-family-predictor";
-const PREDICTION_LOCK_MS = 2 * 60 * 60 * 1000;
+const PREDICTION_WARNING_MS = 2 * 60 * 60 * 1000;
+const PREDICTION_LOCK_MS = 60 * 60 * 1000;
 const NEXT_UPCOMING_MATCH_COUNT = 8;
 
 const emptyScore = (): ScorePick => ({ away: "", home: "" });
@@ -131,6 +132,9 @@ const scorePlayer = (player: Player, results: Record<string, ScorePick>, matches
 const isPredictionLocked = (match: MatchWithState) =>
   Boolean(match.kickoffAt && new Date(match.kickoffAt).getTime() - PREDICTION_LOCK_MS <= Date.now());
 
+const isPredictionLockWarning = (match: MatchWithState) =>
+  Boolean(match.kickoffAt && !isPredictionLocked(match) && new Date(match.kickoffAt).getTime() - PREDICTION_WARNING_MS <= Date.now());
+
 const arePredictionsRevealed = (match: MatchWithState) => Boolean(match.kickoffAt && new Date(match.kickoffAt).getTime() <= Date.now());
 
 const formatKickoff = (match: MatchWithState) =>
@@ -170,8 +174,7 @@ const isUpcomingMatch = (match: MatchWithState) => !match.kickoffAt || new Date(
 
 const isPriorityPick = (match: MatchWithState, score: ScorePick | undefined) => {
   if (!match.kickoffAt || hasScore(score) || isPredictionLocked(match)) return false;
-  const lockTime = new Date(match.kickoffAt).getTime() - PREDICTION_LOCK_MS;
-  return lockTime - Date.now() <= 24 * 60 * 60 * 1000;
+  return isPredictionLockWarning(match);
 };
 
 const buildGroupTable = (groupId: GroupId, matches: MatchWithState[], results: Record<string, ScorePick>) => {
@@ -284,7 +287,8 @@ function ScoreInputs({
   match,
   onChange,
   saveStatus = "idle",
-  score
+  score,
+  urgencyStatus = "idle"
 }: {
   disabled?: boolean;
   label: string;
@@ -292,6 +296,7 @@ function ScoreInputs({
   onChange: (score: ScorePick) => void;
   saveStatus?: SaveStatus;
   score: ScorePick;
+  urgencyStatus?: "idle" | "warning" | "locked";
 }) {
   const updateScore = (side: keyof ScorePick, value: string) => {
     const cleanValue = value === "" ? "" : String(Math.max(0, Math.floor(Number(value))));
@@ -299,7 +304,7 @@ function ScoreInputs({
   };
 
   return (
-    <div className={`score-entry ${disabled ? "disabled" : ""} ${saveStatus !== "idle" ? saveStatus : ""}`} aria-label={label}>
+    <div className={`score-entry ${disabled ? "disabled" : ""} ${saveStatus !== "idle" ? saveStatus : ""} ${urgencyStatus !== "idle" ? urgencyStatus : ""}`} aria-label={label}>
       <label>
         <span>{match.homeTeam.code}</span>
         <input
@@ -582,7 +587,7 @@ export function WorldCupPredictor() {
     const currentScoreKey = scoreKey(score);
     const match = matches.find((item) => item.id === matchId);
     if (match && isPredictionLocked(match)) {
-      setSyncMessage("Predictions lock two hours before kickoff.");
+      setSyncMessage("Predictions lock one hour before kickoff.");
       setPredictionSaveStatus((currentStatus) => ({ ...currentStatus, [matchId]: { scoreKey: currentScoreKey, status: "error" } }));
       return;
     }
@@ -614,7 +619,7 @@ export function WorldCupPredictor() {
     if (!activePlayer) return;
     const match = matches.find((item) => item.id === matchId);
     if (match && isPredictionLocked(match)) {
-      setSyncMessage("Predictions lock two hours before kickoff.");
+      setSyncMessage("Predictions lock one hour before kickoff.");
       return;
     }
     setPlayers((currentPlayers) =>
@@ -721,17 +726,25 @@ export function WorldCupPredictor() {
     const predictionStatus = currentSaveStatus?.scoreKey === scoreKey(predictedScore) ? currentSaveStatus.status : "idle";
     const points = matchPoints(predictedScore, actualScore);
     const locked = isPredictionLocked(match);
+    const lockWarning = isPredictionLockWarning(match);
     const revealed = arePredictionsRevealed(match);
-    const canEditPrediction = !isSupabaseConfigured || !locked;
+    const canEditPrediction = !locked;
     const needsPick = !hasScore(predictedScore) && !locked;
     const priorityPick = isPriorityPick(match, predictedScore);
+    const rowState = locked ? "locked" : lockWarning ? "lock-warning" : priorityPick ? "priority" : needsPick ? "needs-pick" : "";
 
     return (
-      <article className={`match-row ${priorityPick ? "priority" : needsPick ? "needs-pick" : ""}`} key={match.id}>
+      <article className={`match-row ${rowState}`} key={match.id}>
         <div>
           <div className="match-meta">
             <p className="eyebrow">{match.label}</p>
-            {priorityPick ? <span className="urgency-badge">Priority</span> : needsPick ? <span className="urgency-badge soft">Needs pick</span> : null}
+            {locked ? (
+              <span className="urgency-badge danger">Locked</span>
+            ) : lockWarning ? (
+              <span className="urgency-badge">Locks soon</span>
+            ) : needsPick ? (
+              <span className="urgency-badge soft">Needs pick</span>
+            ) : null}
           </div>
           <TeamLine match={match} />
           <small className="match-kickoff">{formatKickoff(match)}</small>
@@ -747,6 +760,7 @@ export function WorldCupPredictor() {
           onChange={(score) => updateActiveMatchScore(match.id, score)}
           saveStatus={predictionStatus}
           score={predictedScore}
+          urgencyStatus={locked ? "locked" : lockWarning ? "warning" : "idle"}
         />
         <ScoreInputs
           disabled={isSupabaseConfigured && !isAdmin}
@@ -776,7 +790,7 @@ export function WorldCupPredictor() {
           <h1>World Cup 2026 predictor</h1>
           <p className="lede">
             Pick the score for every group-stage game. Exact scorelines earn 3 points; the right winner, including a
-            draw, earns 1 point. Picks lock two hours before kickoff and stay private until the match starts.
+            draw, earns 1 point. Picks turn amber two hours before kickoff, lock one hour before kickoff, and stay private until the match starts.
           </p>
           <div className="action-row predictor-actions">
             <button className="button secondary" onClick={resetGame} type="button">
@@ -799,7 +813,7 @@ export function WorldCupPredictor() {
           <div>
             <p className="eyebrow">Shared family game</p>
             <h2>Sign in to save your picks</h2>
-            <p className="muted-copy">We&apos;ll email you a magic link. Your predictions are tied to your email, lock two hours before kickoff, and stay hidden from everyone else until each match starts.</p>
+            <p className="muted-copy">We&apos;ll email you a magic link. Your predictions are tied to your email, turn amber two hours before kickoff, lock one hour before kickoff, and stay hidden from everyone else until each match starts.</p>
           </div>
           <div className="auth-form">
             <input

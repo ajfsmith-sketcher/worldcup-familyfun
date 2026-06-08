@@ -625,6 +625,16 @@ h2 {
   border-color: #e8bd67;
 }
 
+.match-row.lock-warning {
+  background: #fff8ea;
+  border-color: #e8bd67;
+}
+
+.match-row.locked {
+  background: #fff1f2;
+  border-color: #f3a2ad;
+}
+
 .match-meta {
   align-items: center;
   display: flex;
@@ -653,6 +663,12 @@ h2 {
   background: #e8f3f1;
   border-color: #c4ded9;
   color: var(--accent-strong);
+}
+
+.urgency-badge.danger {
+  background: #fff1f2;
+  border-color: #f3a2ad;
+  color: #9f1239;
 }
 
 .match-teams {
@@ -712,6 +728,18 @@ h2 {
 .score-entry.error input {
   background: #fff1f2;
   border-color: #f3a2ad;
+}
+
+.score-entry.warning input {
+  background: #fff8ea;
+  border-color: #e8bd67;
+  box-shadow: inset 0 0 0 1px #e8bd67;
+}
+
+.score-entry.locked input {
+  background: #fff1f2;
+  border-color: #f3a2ad;
+  box-shadow: inset 0 0 0 1px #f3a2ad;
 }
 
 .score-entry.disabled {

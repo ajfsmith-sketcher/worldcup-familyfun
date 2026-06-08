@@ -41,7 +41,8 @@ The first migration in `supabase/migrations` creates:
 Row-level security keeps each player's predictions private until the related match has kicked off:
 
 - players can create and edit only their own predictions
-- predictions can be changed only until two hours before kickoff
+- predictions turn amber two hours before kickoff
+- predictions can be changed only until one hour before kickoff
 - other players' predictions are readable only after `matches.kickoff_at <= now()`
 
 Create a dedicated Supabase project for this app, apply the migrations, then add these Vercel environment variables:
