@@ -78,12 +78,12 @@ create policy "Players can create their own predictions"
       select 1
       from public.matches
       where matches.id = match_id
-      and matches.kickoff_at > now()
+      and matches.kickoff_at > now() + interval '2 hours'
     )
   );
 
-drop policy if exists "Players can update their own predictions before kickoff" on public.predictions;
-create policy "Players can update their own predictions before kickoff"
+drop policy if exists "Players can update their own predictions before lock deadline" on public.predictions;
+create policy "Players can update their own predictions before lock deadline"
   on public.predictions for update
   to authenticated
   using (
@@ -92,7 +92,7 @@ create policy "Players can update their own predictions before kickoff"
       select 1
       from public.matches
       where matches.id = match_id
-      and matches.kickoff_at > now()
+      and matches.kickoff_at > now() + interval '2 hours'
     )
   )
   with check (
@@ -101,7 +101,7 @@ create policy "Players can update their own predictions before kickoff"
       select 1
       from public.matches
       where matches.id = match_id
-      and matches.kickoff_at > now()
+      and matches.kickoff_at > now() + interval '2 hours'
     )
   );
 

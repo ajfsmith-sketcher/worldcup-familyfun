@@ -5,6 +5,8 @@ import { useEffect, useMemo, useState } from "react";
 import { supabase, isSupabaseConfigured } from "@/lib/supabaseClient";
 import { scoringRules, worldCupGroups, worldCupMatches, type GroupId, type WorldCupMatch } from "@/lib/worldCup2026";
 
+type ViewMode = "group" | "date";
+
 type ScorePick = {
   away: string;
   home: string;
@@ -52,11 +54,13 @@ type PredictionRow = {
 type SavedState = {
   activeGroup: GroupId | "all";
   activePlayerId: string;
+  activeView: ViewMode;
   players: Player[];
   results: Record<string, ScorePick>;
 };
 
 const STORAGE_KEY = "world-cup-2026-family-predictor";
+const PREDICTION_LOCK_MS = 2 * 60 * 60 * 1000;
 
 const emptyScore = (): ScorePick => ({ away: "", home: "" });
 
@@ -106,10 +110,80 @@ const completion = (scores: Record<string, ScorePick>, matches: MatchWithState[]
 const scorePlayer = (player: Player, results: Record<string, ScorePick>, matches: MatchWithState[]) =>
   matches.reduce((total, match) => total + matchPoints(player.matchPredictions[match.id], results[match.id]), 0);
 
-const isMatchLocked = (match: MatchWithState) => Boolean(match.kickoffAt && new Date(match.kickoffAt).getTime() <= Date.now());
+const isPredictionLocked = (match: MatchWithState) =>
+  Boolean(match.kickoffAt && new Date(match.kickoffAt).getTime() - PREDICTION_LOCK_MS <= Date.now());
+
+const arePredictionsRevealed = (match: MatchWithState) => Boolean(match.kickoffAt && new Date(match.kickoffAt).getTime() <= Date.now());
 
 const formatKickoff = (match: MatchWithState) =>
   match.kickoffAt ? new Intl.DateTimeFormat("en-GB", { dateStyle: "medium", timeStyle: "short" }).format(new Date(match.kickoffAt)) : "Kickoff TBC";
+
+const formatLockDeadline = (match: MatchWithState) =>
+  match.kickoffAt
+    ? new Intl.DateTimeFormat("en-GB", { dateStyle: "medium", timeStyle: "short" }).format(new Date(new Date(match.kickoffAt).getTime() - PREDICTION_LOCK_MS))
+    : "Lock TBC";
+
+const matchTime = (match: MatchWithState) => (match.kickoffAt ? new Date(match.kickoffAt).getTime() : Number.MAX_SAFE_INTEGER);
+
+const sortMatchesByKickoff = (currentMatches: MatchWithState[]) =>
+  [...currentMatches].sort((a, b) => matchTime(a) - matchTime(b) || a.groupId.localeCompare(b.groupId) || a.id.localeCompare(b.id));
+
+const formatMatchDate = (match: MatchWithState) =>
+  match.kickoffAt ? new Intl.DateTimeFormat("en-GB", { dateStyle: "full" }).format(new Date(match.kickoffAt)) : "Kickoff TBC";
+
+const buildGroupTable = (groupId: GroupId, matches: MatchWithState[], results: Record<string, ScorePick>) => {
+  const group = worldCupGroups.find((item) => item.id === groupId);
+  const rows = (group?.teams ?? []).map((team) => ({
+    drawn: 0,
+    for: 0,
+    against: 0,
+    goalDifference: 0,
+    lost: 0,
+    played: 0,
+    points: 0,
+    team,
+    won: 0
+  }));
+
+  const byCode = new Map(rows.map((row) => [row.team.code, row]));
+
+  matches
+    .filter((match) => match.groupId === groupId && hasScore(results[match.id]))
+    .forEach((match) => {
+      const score = results[match.id];
+      const home = byCode.get(match.homeTeam.code);
+      const away = byCode.get(match.awayTeam.code);
+      if (!home || !away) return;
+
+      const homeScore = Number(score.home);
+      const awayScore = Number(score.away);
+      home.played += 1;
+      away.played += 1;
+      home.for += homeScore;
+      home.against += awayScore;
+      away.for += awayScore;
+      away.against += homeScore;
+
+      if (homeScore > awayScore) {
+        home.won += 1;
+        away.lost += 1;
+        home.points += 3;
+      } else if (awayScore > homeScore) {
+        away.won += 1;
+        home.lost += 1;
+        away.points += 3;
+      } else {
+        home.drawn += 1;
+        away.drawn += 1;
+        home.points += 1;
+        away.points += 1;
+      }
+    });
+
+  return rows
+    .map((row) => ({ ...row, goalDifference: row.for - row.against }))
+    .sort((a, b) => b.points - a.points || b.goalDifference - a.goalDifference || b.for - a.for || a.team.name.localeCompare(b.team.name));
+};
 
 const migratePlayers = (players: unknown): Player[] | null => {
   if (!Array.isArray(players)) return null;
@@ -213,6 +287,7 @@ export function WorldCupPredictor() {
   const [players, setPlayers] = useState<Player[]>([]);
   const [matches, setMatches] = useState<MatchWithState[]>(worldCupMatches);
   const [activePlayerId, setActivePlayerId] = useState("");
+  const [activeView, setActiveView] = useState<ViewMode>("group");
   const [activeGroup, setActiveGroup] = useState<GroupId | "all">("all");
   const [results, setResults] = useState<Record<string, ScorePick>>(emptyMatchScores);
   const [newPlayerName, setNewPlayerName] = useState("");
@@ -231,12 +306,13 @@ export function WorldCupPredictor() {
     if (saved) {
       try {
         const parsed = JSON.parse(saved) as Partial<SavedState>;
-        const migratedPlayers = migratePlayers(parsed.players);
-        if (migratedPlayers && migratedPlayers.length > 0) {
-          setPlayers(migratedPlayers);
-          setActivePlayerId(parsed.activePlayerId || migratedPlayers[0].id);
-          setActiveGroup(parsed.activeGroup || "all");
-          setResults({
+          const migratedPlayers = migratePlayers(parsed.players);
+          if (migratedPlayers && migratedPlayers.length > 0) {
+            setPlayers(migratedPlayers);
+            setActivePlayerId(parsed.activePlayerId || migratedPlayers[0].id);
+            setActiveView(parsed.activeView === "date" ? "date" : "group");
+            setActiveGroup(parsed.activeGroup || "all");
+            setResults({
             ...emptyMatchScores(),
             ...(parsed.results && typeof parsed.results === "object" ? parsed.results : {})
           });
@@ -342,11 +418,16 @@ export function WorldCupPredictor() {
 
   useEffect(() => {
     if (!isLoaded || isSupabaseConfigured) return;
-    window.localStorage.setItem(STORAGE_KEY, JSON.stringify({ activeGroup, activePlayerId, players, results }));
-  }, [activeGroup, activePlayerId, isLoaded, players, results]);
+    window.localStorage.setItem(STORAGE_KEY, JSON.stringify({ activeGroup, activePlayerId, activeView, players, results }));
+  }, [activeGroup, activePlayerId, activeView, isLoaded, players, results]);
 
   const activePlayer = players.find((player) => player.id === activePlayerId) ?? players[0];
-  const filteredMatches = activeGroup === "all" ? matches : matches.filter((match) => match.groupId === activeGroup);
+  const filteredMatches = useMemo(
+    () => (activeGroup === "all" ? matches : matches.filter((match) => match.groupId === activeGroup)),
+    [activeGroup, matches]
+  );
+  const dateOrderedMatches = useMemo(() => sortMatchesByKickoff(filteredMatches), [filteredMatches]);
+  const visibleGroups = activeGroup === "all" ? worldCupGroups : worldCupGroups.filter((group) => group.id === activeGroup);
   const resultCount = completedCount(results, matches);
 
   const standings = useMemo(
@@ -396,6 +477,11 @@ export function WorldCupPredictor() {
 
   const savePrediction = async (matchId: string, score: ScorePick) => {
     if (!supabase || !session || !hasScore(score)) return;
+    const match = matches.find((item) => item.id === matchId);
+    if (match && isPredictionLocked(match)) {
+      setSyncMessage("Predictions lock two hours before kickoff.");
+      return;
+    }
     const { error } = await supabase.from("predictions").upsert({
       away_score: Number(score.away),
       home_score: Number(score.home),
@@ -416,6 +502,11 @@ export function WorldCupPredictor() {
 
   const updateActiveMatchScore = (matchId: string, score: ScorePick) => {
     if (!activePlayer) return;
+    const match = matches.find((item) => item.id === matchId);
+    if (match && isPredictionLocked(match)) {
+      setSyncMessage("Predictions lock two hours before kickoff.");
+      return;
+    }
     setPlayers((currentPlayers) =>
       currentPlayers.map((player) =>
         player.id === activePlayer.id
@@ -463,7 +554,82 @@ export function WorldCupPredictor() {
     setPlayers([starterPlayer]);
     setActivePlayerId(starterPlayer.id);
     setActiveGroup("all");
+    setActiveView("group");
     setResults(emptyMatchScores());
+  };
+
+  const renderGroupTable = (groupId: GroupId) => {
+    const table = buildGroupTable(groupId, matches, results);
+
+    return (
+      <div className="group-table-wrap">
+        <div className="group-table-title">
+          <strong>Group {groupId}</strong>
+          <span>{matches.filter((match) => match.groupId === groupId && hasScore(results[match.id])).length} results</span>
+        </div>
+        <div className="group-table" aria-label={`Group ${groupId} table`}>
+          <div className="group-table-head">
+            <span>Team</span>
+            <span>P</span>
+            <span>W</span>
+            <span>D</span>
+            <span>L</span>
+            <span>GD</span>
+            <span>Pts</span>
+          </div>
+          {table.map((row) => (
+            <div className="group-table-row" key={row.team.code}>
+              <span>
+                {row.team.flag} {row.team.name}
+              </span>
+              <span>{row.played}</span>
+              <span>{row.won}</span>
+              <span>{row.drawn}</span>
+              <span>{row.lost}</span>
+              <span>{row.goalDifference}</span>
+              <strong>{row.points}</strong>
+            </div>
+          ))}
+        </div>
+      </div>
+    );
+  };
+
+  const renderMatchRow = (match: MatchWithState) => {
+    const predictedScore = normalizeScore(activePlayer?.matchPredictions[match.id]);
+    const actualScore = normalizeScore(results[match.id]);
+    const points = matchPoints(predictedScore, actualScore);
+    const locked = isPredictionLocked(match);
+    const revealed = arePredictionsRevealed(match);
+    const canEditPrediction = !isSupabaseConfigured || !locked;
+
+    return (
+      <article className="match-row" key={match.id}>
+        <div>
+          <p className="eyebrow">{match.label}</p>
+          <TeamLine match={match} />
+          <small className="match-kickoff">{formatKickoff(match)}</small>
+          <small className={revealed ? "match-lock open" : locked ? "match-lock locked" : "match-lock"}>
+            {revealed ? "Picks visible" : locked ? "Picks locked, visible at kickoff" : match.kickoffAt ? `Picks lock ${formatLockDeadline(match)}` : "Lock time TBC"}
+          </small>
+        </div>
+        <ScoreInputs
+          disabled={!canEditPrediction}
+          label={`${activePlayer?.name ?? "Player"}'s prediction for ${match.label}`}
+          match={match}
+          onChange={(score) => updateActiveMatchScore(match.id, score)}
+          score={predictedScore}
+        />
+        <ScoreInputs
+          disabled={isSupabaseConfigured && !isAdmin}
+          label={`Actual score for ${match.label}`}
+          match={match}
+          onChange={(score) => updateResultScore(match.id, score)}
+          score={actualScore}
+        />
+        <strong className={`match-points ${points === 3 ? "exact" : points === 1 ? "outcome" : ""}`}>{points}</strong>
+      </article>
+    );
   };
 
   if (!isLoaded) {
@@ -482,7 +648,7 @@ export function WorldCupPredictor() {
           <h1>World Cup 2026 predictor</h1>
           <p className="lede">
             Pick the score for every group-stage game. Exact scorelines earn 3 points; the right winner, including a
-            draw, earns 1 point. In shared mode, everyone&apos;s predictions stay private until kickoff.
+            draw, earns 1 point. Picks lock two hours before kickoff and stay private until the match starts.
           </p>
           <div className="action-row predictor-actions">
             <button className="button secondary" onClick={resetGame} type="button">
@@ -505,7 +671,7 @@ export function WorldCupPredictor() {
           <div>
             <p className="eyebrow">Shared family game</p>
             <h2>Sign in to save your picks</h2>
-            <p className="muted-copy">We&apos;ll email you a magic link. Your predictions are tied to your email and hidden from everyone else until each match kicks off.</p>
+            <p className="muted-copy">We&apos;ll email you a magic link. Your predictions are tied to your email, lock two hours before kickoff, and stay hidden from everyone else until each match starts.</p>
           </div>
           <div className="auth-form">
             <input
@@ -622,6 +788,15 @@ export function WorldCupPredictor() {
                 </span>
               </div>
 
+              <div className="view-tabs" aria-label="Choose match view">
+                <button className={activeView === "group" ? "active" : ""} onClick={() => setActiveView("group")} type="button">
+                  Group view
+                </button>
+                <button className={activeView === "date" ? "active" : ""} onClick={() => setActiveView("date")} type="button">
+                  Date order
+                </button>
+              </div>
+
               <div className="group-tabs" aria-label="Filter matches by group">
                 <button className={activeGroup === "all" ? "active" : ""} onClick={() => setActiveGroup("all")} type="button">
                   All
@@ -638,50 +813,40 @@ export function WorldCupPredictor() {
                 ))}
               </div>
 
-              <div className="match-table">
-                <div className="match-table-head">
-                  <span>Match</span>
-                  <span>Your score</span>
-                  <span>Actual score</span>
-                  <span>Pts</span>
+              {activeView === "group" ? (
+                <div className="group-view">
+                  {visibleGroups.map((group) => {
+                    const groupMatches = matches.filter((match) => match.groupId === group.id);
+                    return (
+                      <section className="group-section" key={group.id}>
+                        {renderGroupTable(group.id)}
+                        <div className="match-table">
+                          <div className="match-table-head">
+                            <span>Match</span>
+                            <span>Your score</span>
+                            <span>Actual score</span>
+                            <span>Pts</span>
+                          </div>
+                          {groupMatches.map(renderMatchRow)}
+                        </div>
+                      </section>
+                    );
+                  })}
                 </div>
-                {filteredMatches.map((match) => {
-                  const predictedScore = normalizeScore(activePlayer?.matchPredictions[match.id]);
-                  const actualScore = normalizeScore(results[match.id]);
-                  const points = matchPoints(predictedScore, actualScore);
-                  const locked = isMatchLocked(match);
-                  const canEditPrediction = !isSupabaseConfigured || !locked;
-
-                  return (
-                    <article className="match-row" key={match.id}>
-                      <div>
-                        <p className="eyebrow">{match.label}</p>
-                        <TeamLine match={match} />
-                        <small className={locked ? "match-lock open" : "match-lock"}>
-                          {locked ? "Picks visible" : `Private until ${formatKickoff(match)}`}
-                        </small>
+              ) : (
+                <div className="date-view">
+                  {dateOrderedMatches.map((match, index) => {
+                    const previousMatch = dateOrderedMatches[index - 1];
+                    const showDateHeading = index === 0 || formatMatchDate(previousMatch) !== formatMatchDate(match);
+                    return (
+                      <div className="date-match-block" key={match.id}>
+                        {showDateHeading ? <h3>{formatMatchDate(match)}</h3> : null}
+                        {renderMatchRow(match)}
                       </div>
-                      <ScoreInputs
-                        disabled={!canEditPrediction}
-                        label={`${activePlayer?.name ?? "Player"}'s prediction for ${match.label}`}
-                        match={match}
-                        onChange={(score) => updateActiveMatchScore(match.id, score)}
-                        score={predictedScore}
-                      />
-                      <ScoreInputs
-                        disabled={isSupabaseConfigured && !isAdmin}
-                        label={`Actual score for ${match.label}`}
-                        match={match}
-                        onChange={(score) => updateResultScore(match.id, score)}
-                        score={actualScore}
-                      />
-                      <strong className={`match-points ${points === 3 ? "exact" : points === 1 ? "outcome" : ""}`}>
-                        {points}
-                      </strong>
-                    </article>
-                  );
-                })}
-              </div>
+                    );
+                  })}
+                </div>
+              )}
             </section>
 
             <section className="panel">

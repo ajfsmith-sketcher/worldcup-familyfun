@@ -9,6 +9,7 @@ Last reviewed: 2026-06-08
 - Supabase project `world-cup-family-fun` is connected through Vercel environment variables.
 - Supabase schema is live with RLS for players, matches, and predictions.
 - Predictions are private until `matches.kickoff_at <= now()`.
+- Predictions lock two hours before kickoff.
 - Players sign in with Supabase magic links and create a display profile.
 - Group-stage match rows are seeded, but kickoff times are placeholders.
 
@@ -43,6 +44,8 @@ Decision needed: who should be admin, and should admin setup remain manual in Su
 Status: mostly confirmed
 
 Chosen rule: everyone’s predictions are private until kickoff.
+
+Chosen rule: prediction entry locks two hours before kickoff.
 
 Still to confirm: after kickoff, should all predictions become visible even before full-time, or only after the match finishes?
 
@@ -143,7 +146,19 @@ Future work:
 - Decide whether players predict knockout scorelines before the tournament or round-by-round.
 - Handle extra time/penalties scoring rules.
 
-### 10. Replace Placeholder Fixture Schedule With Official Schedule
+### 10. Track Tournament Scorers
+
+Status: proposed
+
+Football-data.org has a competition scorers endpoint, but plan access still needs to be confirmed with an API token.
+
+Future work:
+- Confirm whether World Cup scorers are available on the free plan.
+- Add a separate scorers tab.
+- Store scorer rows from the provider if we want historical snapshots.
+- Decide whether scorer tracking is informational only or part of the family game.
+
+### 11. Replace Placeholder Fixture Schedule With Official Schedule
 
 Status: proposed
 
@@ -155,7 +170,7 @@ Future work:
 - Add local-time display.
 - Sort by kickoff rather than generated group order.
 
-### 11. Family Invite / Access Model
+### 12. Family Invite / Access Model
 
 Status: proposed
 
@@ -166,7 +181,7 @@ Possible enhancements:
 - Add invite codes.
 - Add a simple family roster managed by admin.
 
-### 12. Custom Domain
+### 13. Custom Domain
 
 Status: proposed
 
@@ -178,7 +193,7 @@ https://worldcup-familyfun.vercel.app
 
 Optional: add a friendlier custom domain or subdomain.
 
-### 13. Better Admin Surface
+### 14. Better Admin Surface
 
 Status: proposed
 
@@ -190,7 +205,7 @@ Possible admin improvements:
 - Bulk import actual results.
 - Audit trail for result changes.
 
-### 14. UX Polish For Locked Matches
+### 15. UX Polish For Locked Matches
 
 Status: proposed
 
@@ -201,7 +216,7 @@ Improve the “private until kickoff” experience:
 - Explain why another player’s pick is hidden.
 - Show countdown to kickoff.
 
-### 15. Mobile Pass
+### 16. Mobile Pass
 
 Status: proposed
 
@@ -212,7 +227,7 @@ The app is responsive, but needs a proper phone walkthrough:
 - Leaderboard scanning.
 - Long match list navigation.
 
-### 16. Tests
+### 17. Tests
 
 Status: proposed
 
@@ -221,10 +236,10 @@ Add coverage for:
 - Exact-score scoring.
 - Correct-winner scoring.
 - Draw outcome scoring.
-- Locking rules before/after kickoff.
+- Locking rules before/after the two-hour cutoff.
 - Supabase row mapping.
 
-### 17. Dependency Audit
+### 18. Dependency Audit
 
 Status: proposed
 
