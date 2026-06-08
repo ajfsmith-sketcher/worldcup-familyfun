@@ -693,12 +693,14 @@ export function WorldCupPredictor() {
   };
 
   const saveResult = async (matchId: string, score: ScorePick) => {
-    if (!supabase || !hasScore(score)) return;
+    if (!supabase) return;
+    const nextHomeScore = score.home === "" ? null : Number(score.home);
+    const nextAwayScore = score.away === "" ? null : Number(score.away);
     const { error } = await supabase
       .from("matches")
-      .update({ away_score: Number(score.away), home_score: Number(score.home) })
+      .update({ away_score: nextAwayScore, home_score: nextHomeScore })
       .eq("id", matchId);
-    setSyncMessage(error ? error.message : "Actual score saved.");
+    setSyncMessage(error ? error.message : hasScore(score) ? "Actual score saved." : "Actual score cleared.");
   };
 
   const syncScores = async () => {
