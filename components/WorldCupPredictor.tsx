@@ -9,6 +9,7 @@ type ViewMode = "group" | "date";
 type DateFilter = "all" | "today" | string;
 type GroupFilter = "all" | GroupId;
 type TeamFilter = "all" | string;
+type SaveStatus = "idle" | "saving" | "saved" | "error";
 
 type ScorePick = {
   away: string;
@@ -56,6 +57,11 @@ type PredictionRow = {
   player_id: string;
 };
 
+type PredictionSaveState = {
+  scoreKey?: string;
+  status: SaveStatus;
+};
+
 type SavedState = {
   activeDateFilter: DateFilter;
   activeGroupFilter: GroupFilter;
@@ -95,6 +101,8 @@ const normalizeScore = (score: ScorePick | undefined): ScorePick => ({
 });
 
 const hasScore = (score: ScorePick | undefined) => score?.home !== "" && score?.away !== "";
+
+const scoreKey = (score: ScorePick | undefined) => (hasScore(score) ? `${score?.home}-${score?.away}` : "");
 
 const outcome = (score: ScorePick | undefined) => {
   if (!hasScore(score)) return "pending";
@@ -275,12 +283,14 @@ function ScoreInputs({
   label,
   match,
   onChange,
+  saveStatus = "idle",
   score
 }: {
   disabled?: boolean;
   label: string;
   match: MatchWithState;
   onChange: (score: ScorePick) => void;
+  saveStatus?: SaveStatus;
   score: ScorePick;
 }) {
   const updateScore = (side: keyof ScorePick, value: string) => {
@@ -289,7 +299,7 @@ function ScoreInputs({
   };
 
   return (
-    <div className={`score-entry ${disabled ? "disabled" : ""}`} aria-label={label}>
+    <div className={`score-entry ${disabled ? "disabled" : ""} ${saveStatus !== "idle" ? saveStatus : ""}`} aria-label={label}>
       <label>
         <span>{match.homeTeam.code}</span>
         <input
@@ -332,6 +342,7 @@ export function WorldCupPredictor() {
   const [showUpcomingOnly, setShowUpcomingOnly] = useState(false);
   const [hideCompleted, setHideCompleted] = useState(false);
   const [results, setResults] = useState<Record<string, ScorePick>>(emptyMatchScores);
+  const [predictionSaveStatus, setPredictionSaveStatus] = useState<Record<string, PredictionSaveState>>({});
   const [newPlayerName, setNewPlayerName] = useState("");
   const [isLoaded, setIsLoaded] = useState(false);
   const [session, setSession] = useState<Session | null>(null);
@@ -414,18 +425,24 @@ export function WorldCupPredictor() {
     }
 
     const predictions = (predictionResponse.data ?? []) as PredictionRow[];
+    const currentPlayerSaveStatus: Record<string, PredictionSaveState> = {};
     predictions.forEach((prediction) => {
       const player = sharedPlayers.find((item) => item.id === prediction.player_id);
       if (!player) return;
-      player.matchPredictions[prediction.match_id] = {
+      const savedScore = {
         away: String(prediction.away_score),
         home: String(prediction.home_score)
       };
+      player.matchPredictions[prediction.match_id] = savedScore;
+      if (prediction.player_id === currentSession.user.id) {
+        currentPlayerSaveStatus[prediction.match_id] = { scoreKey: scoreKey(savedScore), status: "saved" };
+      }
     });
 
     setMatches(sharedMatches);
     setResults(sharedResults);
     setPlayers(sharedPlayers);
+    setPredictionSaveStatus(currentPlayerSaveStatus);
     setActivePlayerId(currentSession.user.id);
     setSyncMessage("Shared game synced.");
   };
@@ -562,16 +579,24 @@ export function WorldCupPredictor() {
 
   const savePrediction = async (matchId: string, score: ScorePick) => {
     if (!supabase || !session || !hasScore(score)) return;
+    const currentScoreKey = scoreKey(score);
     const match = matches.find((item) => item.id === matchId);
     if (match && isPredictionLocked(match)) {
       setSyncMessage("Predictions lock two hours before kickoff.");
+      setPredictionSaveStatus((currentStatus) => ({ ...currentStatus, [matchId]: { scoreKey: currentScoreKey, status: "error" } }));
       return;
     }
+    setPredictionSaveStatus((currentStatus) => ({ ...currentStatus, [matchId]: { scoreKey: currentScoreKey, status: "saving" } }));
     const { error } = await supabase.from("predictions").upsert({
       away_score: Number(score.away),
       home_score: Number(score.home),
       match_id: matchId,
       player_id: session.user.id
+    });
+    setPredictionSaveStatus((currentStatus) => {
+      const latestStatus = currentStatus[matchId];
+      if (latestStatus && latestStatus.scoreKey !== currentScoreKey) return currentStatus;
+      return { ...currentStatus, [matchId]: { scoreKey: currentScoreKey, status: error ? "error" : "saved" } };
     });
     setSyncMessage(error ? error.message : "Prediction saved.");
   };
@@ -605,6 +630,10 @@ export function WorldCupPredictor() {
           : player
       )
     );
+    if (!hasScore(score)) {
+      setPredictionSaveStatus((currentStatus) => ({ ...currentStatus, [matchId]: { scoreKey: "", status: "idle" } }));
+      return;
+    }
     if (isSupabaseConfigured) {
       savePrediction(matchId, score);
     }
@@ -637,6 +666,7 @@ export function WorldCupPredictor() {
     if (!window.confirm("Reset all players, match predictions, and actual scores?")) return;
     const starterPlayer = createPlayer("Alex");
     setPlayers([starterPlayer]);
+    setPredictionSaveStatus({});
     setActivePlayerId(starterPlayer.id);
     setActiveView("group");
     setActiveDateFilter("all");
@@ -687,6 +717,8 @@ export function WorldCupPredictor() {
   const renderMatchRow = (match: MatchWithState) => {
     const predictedScore = normalizeScore(activePlayer?.matchPredictions[match.id]);
     const actualScore = normalizeScore(results[match.id]);
+    const currentSaveStatus = predictionSaveStatus[match.id];
+    const predictionStatus = currentSaveStatus?.scoreKey === scoreKey(predictedScore) ? currentSaveStatus.status : "idle";
     const points = matchPoints(predictedScore, actualScore);
     const locked = isPredictionLocked(match);
     const revealed = arePredictionsRevealed(match);
@@ -713,6 +745,7 @@ export function WorldCupPredictor() {
           label={`${activePlayer?.name ?? "Player"}'s prediction for ${match.label}`}
           match={match}
           onChange={(score) => updateActiveMatchScore(match.id, score)}
+          saveStatus={predictionStatus}
           score={predictedScore}
         />
         <ScoreInputs
