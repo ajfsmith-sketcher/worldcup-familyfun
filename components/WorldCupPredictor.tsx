@@ -6,6 +6,7 @@ import { supabase, isSupabaseConfigured } from "@/lib/supabaseClient";
 import { scoringRules, worldCupGroups, worldCupMatches, type GroupId, type WorldCupMatch } from "@/lib/worldCup2026";
 
 type ViewMode = "group" | "date";
+type DateFilter = "all" | "today" | string;
 
 type ScorePick = {
   away: string;
@@ -52,6 +53,7 @@ type PredictionRow = {
 };
 
 type SavedState = {
+  activeDateFilter: DateFilter;
   activeGroup: GroupId | "all";
   activePlayerId: string;
   activeView: ViewMode;
@@ -130,6 +132,27 @@ const sortMatchesByKickoff = (currentMatches: MatchWithState[]) =>
 
 const formatMatchDate = (match: MatchWithState) =>
   match.kickoffAt ? new Intl.DateTimeFormat("en-GB", { dateStyle: "full" }).format(new Date(match.kickoffAt)) : "Kickoff TBC";
+
+const toDateKey = (date: Date) => {
+  const month = String(date.getMonth() + 1).padStart(2, "0");
+  const day = String(date.getDate()).padStart(2, "0");
+  return `${date.getFullYear()}-${month}-${day}`;
+};
+
+const matchDateKey = (match: MatchWithState) => (match.kickoffAt ? toDateKey(new Date(match.kickoffAt)) : "tbc");
+
+const formatDateKey = (dateKey: string) => {
+  if (dateKey === "tbc") return "Kickoff TBC";
+  return new Intl.DateTimeFormat("en-GB", { dateStyle: "medium" }).format(new Date(`${dateKey}T12:00:00`));
+};
+
+const isTodayMatch = (match: MatchWithState) => match.kickoffAt && matchDateKey(match) === toDateKey(new Date());
+
+const isPriorityPick = (match: MatchWithState, score: ScorePick | undefined) => {
+  if (!match.kickoffAt || hasScore(score) || isPredictionLocked(match)) return false;
+  const lockTime = new Date(match.kickoffAt).getTime() - PREDICTION_LOCK_MS;
+  return lockTime - Date.now() <= 24 * 60 * 60 * 1000;
+};
 
 const buildGroupTable = (groupId: GroupId, matches: MatchWithState[], results: Record<string, ScorePick>) => {
   const group = worldCupGroups.find((item) => item.id === groupId);
@@ -288,6 +311,7 @@ export function WorldCupPredictor() {
   const [matches, setMatches] = useState<MatchWithState[]>(worldCupMatches);
   const [activePlayerId, setActivePlayerId] = useState("");
   const [activeView, setActiveView] = useState<ViewMode>("group");
+  const [activeDateFilter, setActiveDateFilter] = useState<DateFilter>("all");
   const [activeGroup, setActiveGroup] = useState<GroupId | "all">("all");
   const [results, setResults] = useState<Record<string, ScorePick>>(emptyMatchScores);
   const [newPlayerName, setNewPlayerName] = useState("");
@@ -311,6 +335,7 @@ export function WorldCupPredictor() {
             setPlayers(migratedPlayers);
             setActivePlayerId(parsed.activePlayerId || migratedPlayers[0].id);
             setActiveView(parsed.activeView === "date" ? "date" : "group");
+            setActiveDateFilter(typeof parsed.activeDateFilter === "string" ? parsed.activeDateFilter : "all");
             setActiveGroup(parsed.activeGroup || "all");
             setResults({
             ...emptyMatchScores(),
@@ -418,8 +443,8 @@ export function WorldCupPredictor() {
 
   useEffect(() => {
     if (!isLoaded || isSupabaseConfigured) return;
-    window.localStorage.setItem(STORAGE_KEY, JSON.stringify({ activeGroup, activePlayerId, activeView, players, results }));
-  }, [activeGroup, activePlayerId, activeView, isLoaded, players, results]);
+    window.localStorage.setItem(STORAGE_KEY, JSON.stringify({ activeDateFilter, activeGroup, activePlayerId, activeView, players, results }));
+  }, [activeDateFilter, activeGroup, activePlayerId, activeView, isLoaded, players, results]);
 
   const activePlayer = players.find((player) => player.id === activePlayerId) ?? players[0];
   const filteredMatches = useMemo(
@@ -427,6 +452,25 @@ export function WorldCupPredictor() {
     [activeGroup, matches]
   );
   const dateOrderedMatches = useMemo(() => sortMatchesByKickoff(filteredMatches), [filteredMatches]);
+  const todayKey = toDateKey(new Date());
+  const dateOptions = useMemo(
+    () =>
+      Array.from(new Set(dateOrderedMatches.filter((match) => match.kickoffAt).map(matchDateKey))).sort((a, b) => a.localeCompare(b)),
+    [dateOrderedMatches]
+  );
+  const dateFilteredMatches = useMemo(
+    () =>
+      dateOrderedMatches.filter((match) => {
+        if (activeDateFilter === "all") return true;
+        if (activeDateFilter === "today") return isTodayMatch(match);
+        return matchDateKey(match) === activeDateFilter;
+      }),
+    [activeDateFilter, dateOrderedMatches]
+  );
+  const priorityCount = useMemo(
+    () => dateFilteredMatches.filter((match) => isPriorityPick(match, activePlayer?.matchPredictions[match.id])).length,
+    [activePlayer?.matchPredictions, dateFilteredMatches]
+  );
   const visibleGroups = activeGroup === "all" ? worldCupGroups : worldCupGroups.filter((group) => group.id === activeGroup);
   const resultCount = completedCount(results, matches);
 
@@ -555,6 +599,7 @@ export function WorldCupPredictor() {
     setActivePlayerId(starterPlayer.id);
     setActiveGroup("all");
     setActiveView("group");
+    setActiveDateFilter("all");
     setResults(emptyMatchScores());
   };
 
@@ -602,11 +647,16 @@ export function WorldCupPredictor() {
     const locked = isPredictionLocked(match);
     const revealed = arePredictionsRevealed(match);
     const canEditPrediction = !isSupabaseConfigured || !locked;
+    const needsPick = !hasScore(predictedScore) && !locked;
+    const priorityPick = isPriorityPick(match, predictedScore);
 
     return (
-      <article className="match-row" key={match.id}>
+      <article className={`match-row ${priorityPick ? "priority" : needsPick ? "needs-pick" : ""}`} key={match.id}>
         <div>
-          <p className="eyebrow">{match.label}</p>
+          <div className="match-meta">
+            <p className="eyebrow">{match.label}</p>
+            {priorityPick ? <span className="urgency-badge">Priority</span> : needsPick ? <span className="urgency-badge soft">Needs pick</span> : null}
+          </div>
           <TeamLine match={match} />
           <small className="match-kickoff">{formatKickoff(match)}</small>
           <small className={revealed ? "match-lock open" : locked ? "match-lock locked" : "match-lock"}>
@@ -835,8 +885,36 @@ export function WorldCupPredictor() {
                 </div>
               ) : (
                 <div className="date-view">
-                  {dateOrderedMatches.map((match, index) => {
-                    const previousMatch = dateOrderedMatches[index - 1];
+                  <div className="date-filter-panel">
+                    <div>
+                      <strong>Date filter</strong>
+                      <span>
+                        {priorityCount > 0
+                          ? `${priorityCount} priority ${priorityCount === 1 ? "pick" : "picks"} in this view`
+                          : "No urgent picks in this view"}
+                      </span>
+                    </div>
+                    <div className="date-tabs" aria-label="Filter matches by date">
+                      <button className={activeDateFilter === "all" ? "active" : ""} onClick={() => setActiveDateFilter("all")} type="button">
+                        All dates
+                      </button>
+                      <button className={activeDateFilter === "today" ? "active" : ""} onClick={() => setActiveDateFilter("today")} type="button">
+                        Today
+                      </button>
+                      {dateOptions.filter((dateKey) => dateKey !== todayKey).map((dateKey) => (
+                        <button className={activeDateFilter === dateKey ? "active" : ""} key={dateKey} onClick={() => setActiveDateFilter(dateKey)} type="button">
+                          {formatDateKey(dateKey)}
+                        </button>
+                      ))}
+                    </div>
+                  </div>
+
+                  {dateFilteredMatches.length === 0 ? (
+                    <p className="empty">No matches for this date filter.</p>
+                  ) : null}
+
+                  {dateFilteredMatches.map((match, index) => {
+                    const previousMatch = dateFilteredMatches[index - 1];
                     const showDateHeading = index === 0 || formatMatchDate(previousMatch) !== formatMatchDate(match);
                     return (
                       <div className="date-match-block" key={match.id}>

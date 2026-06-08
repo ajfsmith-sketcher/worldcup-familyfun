@@ -447,6 +447,53 @@ h2 {
   gap: 16px;
 }
 
+.date-filter-panel {
+  background: #fbfcfc;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  display: grid;
+  gap: 12px;
+  padding: 12px;
+}
+
+.date-filter-panel > div:first-child {
+  align-items: center;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px 14px;
+  justify-content: space-between;
+}
+
+.date-filter-panel span {
+  color: var(--muted);
+  font-size: 0.84rem;
+  font-weight: 800;
+}
+
+.date-tabs {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.date-tabs button {
+  background: var(--surface-muted);
+  border: 1px solid var(--line);
+  border-radius: 999px;
+  color: var(--ink);
+  cursor: pointer;
+  font-size: 0.88rem;
+  font-weight: 800;
+  min-height: 34px;
+  padding: 0 12px;
+}
+
+.date-tabs button.active {
+  background: var(--accent);
+  border-color: var(--accent);
+  color: #fff;
+}
+
 .date-match-block {
   display: grid;
   gap: 8px;
@@ -544,6 +591,45 @@ h2 {
   border: 1px solid var(--line);
   border-radius: 8px;
   padding: 12px;
+}
+
+.match-row.needs-pick {
+  border-color: #c8d5d8;
+}
+
+.match-row.priority {
+  background: #fff8ea;
+  border-color: #e8bd67;
+}
+
+.match-meta {
+  align-items: center;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-bottom: 2px;
+}
+
+.match-meta .eyebrow {
+  margin-bottom: 0;
+}
+
+.urgency-badge {
+  background: #fff4df;
+  border: 1px solid #f2d49a;
+  border-radius: 999px;
+  color: var(--warning);
+  display: inline-flex;
+  font-size: 0.68rem;
+  font-weight: 900;
+  padding: 4px 8px;
+  text-transform: uppercase;
+}
+
+.urgency-badge.soft {
+  background: #e8f3f1;
+  border-color: #c4ded9;
+  color: var(--accent-strong);
 }
 
 .match-teams {
