@@ -86,20 +86,34 @@ Use two separate users/browsers:
 - Set one test match kickoff to the past.
 - User B should then see User A’s prediction for that match only.
 
-### 7. Configure Custom SMTP For Auth Emails
+### 7. Buy And Verify Resend Sending Domain
+
+Status: high priority
+
+Set up a custom sending domain before moving the family onto production auth emails.
+
+Recommendation:
+- Buy a simple domain through Cloudflare, Porkbun, Namecheap, or another DNS-friendly registrar.
+- Add a sending subdomain in Resend, such as `mail.yourdomain.com`.
+- Verify the DKIM, SPF, and MX DNS records that Resend generates.
+- Use a sender like `World Cup Family Fun <no-reply@mail.yourdomain.com>`.
+
+Why it matters: Supabase custom SMTP needs a verified sender domain so magic-link emails are more reliable and less likely to hit provider limits or spam filters.
+
+### 8. Configure Custom SMTP For Auth Emails
 
 Status: open
 
 Supabase's built-in auth email provider has very low rate limits and can return "email rate limit exceeded" during normal family signup/testing.
 
 Setup notes:
-- Choose an SMTP/email provider such as Resend, Postmark, or SendGrid.
+- Use Resend if the sending domain setup above is complete, or choose another SMTP/email provider such as Postmark or SendGrid.
 - Configure Supabase `Authentication` -> `SMTP Settings`.
 - Confirm auth email rate limits under `Authentication` -> `Rate Limits`.
 - Re-test magic-link sign-in from phone and laptop after SMTP is configured.
 - Keep the production Site URL and Redirect URLs set to `https://worldcup-familyfun.vercel.app`.
 
-### 8. Admin Actual Score Test
+### 9. Admin Actual Score Test
 
 Status: open
 
@@ -111,7 +125,7 @@ Confirm actual score entry works only for an admin user:
 
 ## Product Backlog
 
-### 9. Source Actual Scores Automatically
+### 10. Source Actual Scores Automatically
 
 Status: proposed - candidate API identified
 
@@ -142,7 +156,7 @@ Implementation notes:
 - Add Vercel Cron to run syncs more frequently on matchdays.
 - Keep a small audit trail or timestamp so we can see when scores were last updated.
 
-### 10. Add Knockout Rounds
+### 11. Add Knockout Rounds
 
 Status: proposed
 
@@ -153,7 +167,7 @@ Future work:
 - Decide whether players predict knockout scorelines before the tournament or round-by-round.
 - Handle extra time/penalties scoring rules.
 
-### 11. Track Tournament Scorers
+### 12. Track Tournament Scorers
 
 Status: proposed
 
@@ -165,13 +179,13 @@ Future work:
 - Store scorer rows from the provider if we want historical snapshots.
 - Decide whether scorer tracking is informational only or part of the family game.
 
-### 12. Monitor Fixture Schedule Changes
+### 13. Monitor Fixture Schedule Changes
 
 Status: proposed
 
 The official group-stage schedule has been loaded. Keep this item as a reminder to monitor for any FIFA venue/time adjustments before the tournament starts.
 
-### 13. Family Invite / Access Model
+### 14. Family Invite / Access Model
 
 Status: proposed
 
@@ -182,7 +196,7 @@ Possible enhancements:
 - Add invite codes.
 - Add a simple family roster managed by admin.
 
-### 14. Custom Domain
+### 15. Custom Domain
 
 Status: proposed
 
@@ -194,7 +208,7 @@ https://worldcup-familyfun.vercel.app
 
 Optional: add a friendlier custom domain or subdomain.
 
-### 15. Better Admin Surface
+### 16. Better Admin Surface
 
 Status: proposed
 
@@ -206,7 +220,7 @@ Possible admin improvements:
 - Bulk import actual results.
 - Audit trail for result changes.
 
-### 16. UX Polish For Locked Matches
+### 17. UX Polish For Locked Matches
 
 Status: proposed
 
@@ -217,7 +231,7 @@ Improve the “private until kickoff” experience:
 - Explain why another player’s pick is hidden.
 - Show countdown to kickoff.
 
-### 17. Mobile Pass
+### 18. Mobile Pass
 
 Status: proposed
 
@@ -228,7 +242,7 @@ The app is responsive, but needs a proper phone walkthrough:
 - Leaderboard scanning.
 - Long match list navigation.
 
-### 18. Tests
+### 19. Tests
 
 Status: proposed
 
@@ -240,7 +254,7 @@ Add coverage for:
 - Locking rules before/after the two-hour cutoff.
 - Supabase row mapping.
 
-### 19. Dependency Audit
+### 20. Dependency Audit
 
 Status: proposed
 
