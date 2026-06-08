@@ -103,16 +103,34 @@ Confirm actual score entry works only for an admin user:
 
 ### 8. Source Actual Scores Automatically
 
-Status: proposed
+Status: proposed - candidate API identified
 
-Earlier idea: add a results import/update flow instead of manual admin score entry.
+Candidate: football-data.org
 
-Options:
-- Use a reliable football data API.
-- Maintain a small curated result update file.
-- Build an admin “matchday results” page.
+Useful docs:
+- https://www.football-data.org/documentation
+- https://www.football-data.org/coverage
+- https://www.football-data.org/pricing
 
-Open decision: which source should we trust for live/official results?
+Why it looks promising:
+- Coverage includes Worldcup on the free tier.
+- FIFA World Cup uses competition code `WC`.
+- Match endpoints support filters for `season`, `status`, `dateFrom`, `dateTo`, `stage`, and `group`.
+- Rate limits should be fine for family use if we sync server-side instead of calling from every browser.
+
+Caveats:
+- Free-plan scores are delayed.
+- Live scores appear to require the paid "Free w/ Livescores" plan.
+- The API token must stay server-side, not in frontend code.
+- Manual admin score editing should remain as a fallback.
+
+Implementation notes:
+- Get a football-data.org API token.
+- Test `GET https://api.football-data.org/v4/competitions/WC/matches?season=2026` once 2026 fixtures/results are available.
+- Add external mapping fields to `matches`, such as `external_provider`, `external_match_id`, and `last_synced_at`.
+- Add a protected `/api/sync-scores` route that pulls scores and writes actual scores into Supabase.
+- Add Vercel Cron to run syncs more frequently on matchdays.
+- Keep a small audit trail or timestamp so we can see when scores were last updated.
 
 ### 9. Add Knockout Rounds
 
