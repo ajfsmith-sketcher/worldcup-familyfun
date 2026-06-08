@@ -433,60 +433,46 @@ h2 {
 }
 
 .match-filters {
-  display: grid;
-  gap: 12px;
-  margin-bottom: 18px;
-}
-
-.filter-bar {
   background: #fbfcfc;
   border: 1px solid var(--line);
   border-radius: 8px;
   display: grid;
-  gap: 10px;
+  gap: 12px;
+  margin-bottom: 18px;
   padding: 12px;
 }
 
-.filter-bar-heading {
-  align-items: center;
-  display: flex;
-  flex-wrap: wrap;
-  gap: 8px 14px;
-  justify-content: space-between;
+.filter-select-grid {
+  display: grid;
+  gap: 10px;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
 }
 
-.filter-bar-heading span {
+.filter-select-grid label {
+  display: grid;
+  gap: 6px;
+}
+
+.filter-select-grid span {
   color: var(--muted);
-  font-size: 0.84rem;
+  font-size: 0.78rem;
   font-weight: 800;
+  text-transform: uppercase;
 }
 
-.filter-tabs {
-  display: flex;
-  gap: 8px;
-  overflow-x: auto;
-  padding-bottom: 2px;
-  scrollbar-width: thin;
-}
-
-.filter-tabs button {
-  background: var(--surface-muted);
+.filter-select-grid select {
+  appearance: none;
+  background: #fff;
   border: 1px solid var(--line);
-  border-radius: 999px;
+  border-radius: 8px;
   color: var(--ink);
   cursor: pointer;
-  flex: 0 0 auto;
-  font-size: 0.88rem;
   font-weight: 800;
-  min-height: 34px;
-  padding: 0 12px;
-  white-space: nowrap;
-}
-
-.filter-tabs button.active {
-  background: var(--accent);
-  border-color: var(--accent);
-  color: #fff;
+  min-height: 42px;
+  overflow: hidden;
+  padding: 0 36px 0 12px;
+  text-overflow: ellipsis;
+  width: 100%;
 }
 
 .quick-filters {
@@ -515,6 +501,12 @@ h2 {
 
 .quick-filters span {
   font-size: 0.88rem;
+  font-weight: 800;
+}
+
+.filter-summary {
+  color: var(--muted);
+  font-size: 0.86rem;
   font-weight: 800;
 }
 
@@ -793,6 +785,7 @@ h2 {
   .auth-panel,
   .predictor-hero,
   .predictor-grid,
+  .filter-select-grid,
   .match-row,
   .prediction-summary {
     grid-template-columns: 1fr;
