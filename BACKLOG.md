@@ -174,10 +174,10 @@ Implementation notes:
 - A protected `/api/sync-scores` route pulls scores/odds and writes actual scores into Supabase for admin users.
 - Vercel Cron is configured to call `/api/sync-scores` hourly.
 - Cron calls require `CRON_SECRET` as a bearer token.
+- `CRON_SECRET` has been added in Vercel.
 - `last_synced_at` shows when scores were last updated.
 
 Remaining:
-- Add `CRON_SECRET` in Vercel project environment variables.
 - Confirm the production cron invocation after the next deployment.
 - Re-test once football-data.org has final/live 2026 match data available.
 
