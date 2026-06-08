@@ -719,7 +719,13 @@ export function WorldCupPredictor() {
         Authorization: `Bearer ${accessToken}`
       }
     });
-    const payload = (await response.json()) as { error?: string; matched?: number; unmatched?: unknown[]; updated?: number };
+    const payload = (await response.json()) as {
+      error?: string;
+      matched?: number;
+      rateLimit?: { remaining?: string; reset?: string; warning?: string };
+      unmatched?: unknown[];
+      updated?: number;
+    };
     if (!response.ok) {
       setScoreSyncMessage(payload.error ?? "Could not sync scores.");
       setIsSyncingScores(false);
@@ -727,7 +733,12 @@ export function WorldCupPredictor() {
     }
 
     await loadSharedState(session);
-    setScoreSyncMessage(`Scores synced. Updated ${payload.updated ?? 0} of ${payload.matched ?? 0} matched fixtures.`);
+    const rateNote = payload.rateLimit?.warning
+      ? ` ${payload.rateLimit.warning}`
+      : payload.rateLimit?.remaining
+        ? ` API requests remaining: ${payload.rateLimit.remaining}.`
+        : "";
+    setScoreSyncMessage(`Scores synced. Updated ${payload.updated ?? 0} of ${payload.matched ?? 0} matched fixtures.${rateNote}`);
     setIsSyncingScores(false);
   };
 

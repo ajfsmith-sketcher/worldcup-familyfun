@@ -36,6 +36,45 @@ type FootballDataMatch = {
   };
 };
 
+type RateLimitInfo = {
+  limit?: string;
+  remaining?: string;
+  reset?: string;
+  warning?: string;
+};
+
+const headerValue = (headers: Headers, names: string[]) => {
+  for (const name of names) {
+    const value = headers.get(name);
+    if (value) return value;
+  }
+  return undefined;
+};
+
+const footballDataRateLimitInfo = (headers: Headers): RateLimitInfo => {
+  const remaining = headerValue(headers, [
+    "x-requests-available-minute",
+    "x-requests-available",
+    "x-ratelimit-remaining",
+    "x-rate-limit-remaining"
+  ]);
+  const limit = headerValue(headers, ["x-ratelimit-limit", "x-rate-limit-limit"]);
+  const reset = headerValue(headers, [
+    "x-requestcounter-reset",
+    "x-ratelimit-reset",
+    "x-rate-limit-reset",
+    "retry-after"
+  ]);
+  const remainingCount = remaining ? Number(remaining) : Number.NaN;
+
+  return {
+    limit,
+    remaining,
+    reset,
+    warning: Number.isFinite(remainingCount) && remainingCount <= 2 ? "football-data.org request allowance is low." : undefined
+  };
+};
+
 const normalize = (value: string | undefined) =>
   (value ?? "")
     .toLowerCase()
@@ -101,9 +140,11 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({ error: localResponse.error.message }, { status: 500 });
   }
 
+  const rateLimit = footballDataRateLimitInfo(apiResponse.headers);
+
   if (!apiResponse.ok) {
     const body = await apiResponse.text();
-    return NextResponse.json({ error: `football-data.org returned ${apiResponse.status}`, body }, { status: 502 });
+    return NextResponse.json({ error: `football-data.org returned ${apiResponse.status}`, body, rateLimit }, { status: 502 });
   }
 
   const apiPayload = (await apiResponse.json()) as { matches?: FootballDataMatch[] };
@@ -150,6 +191,7 @@ export async function POST(request: NextRequest) {
   return NextResponse.json({
     failed,
     matched: updates.length,
+    rateLimit,
     unmatched,
     updated: updates.length - failed.length
   });
