@@ -606,6 +606,7 @@ export function WorldCupPredictor() {
     () => filteredMatches.filter((match) => isPriorityPick(match, activePlayer?.matchPredictions[match.id])).length,
     [activePlayer?.matchPredictions, filteredMatches]
   );
+  const nextMatches = useMemo(() => nextKickoffMatches(matches), [matches]);
   const visibleGroups = worldCupGroups.filter((group) => filteredMatches.some((match) => match.groupId === group.id));
   const resultCount = completedCount(results, matches);
 
@@ -1028,6 +1029,38 @@ export function WorldCupPredictor() {
               Family table
             </button>
           </div>
+
+          {nextMatches.length > 0 ? (
+            <section className="panel next-matches-panel">
+              <div className="section-heading">
+                <div>
+                  <p className="eyebrow">Up next</p>
+                  <h2>{nextMatches.length === 1 ? "Next match" : "Next matches"}</h2>
+                </div>
+                <span className="badge warning">Locks {formatLockDeadline(nextMatches[0])}</span>
+              </div>
+              <div className="next-match-list">
+                {nextMatches.map((match) => (
+                  <article className="next-match-card" key={match.id}>
+                    <div>
+                      <strong>
+                        {match.homeTeam.flag} {match.homeTeam.name} vs {match.awayTeam.flag} {match.awayTeam.name}
+                      </strong>
+                      <span>
+                        Group {match.groupId} · Match {match.matchNumber}
+                      </span>
+                    </div>
+                    <div>
+                      <b>{formatKickoff(match)}</b>
+                      <span>
+                        {match.venue}, {match.city}
+                      </span>
+                    </div>
+                  </article>
+                ))}
+              </div>
+            </section>
+          ) : null}
 
           <section className={`predictor-grid ${activeWorkspaceTab === "picks" ? "picks-layout" : "family-layout"}`}>
             {activeWorkspaceTab === "family" ? (
