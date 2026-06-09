@@ -331,6 +331,11 @@ const predictionStatusCopy = (match: MatchWithState) => {
 
 const formatOdds = (value: number | null | undefined) => (typeof value === "number" ? value.toFixed(2) : "-");
 
+const hasOdds = (match: MatchWithState) => Boolean(match.odds?.homeWin || match.odds?.draw || match.odds?.awayWin);
+
+const oddsCopy = (match: MatchWithState) =>
+  `Odds: ${match.homeTeam.code} ${formatOdds(match.odds?.homeWin)} · Draw ${formatOdds(match.odds?.draw)} · ${match.awayTeam.code} ${formatOdds(match.odds?.awayWin)}`;
+
 const worldCupFunFacts = [
   "The 2026 World Cup is the first edition planned for 48 teams.",
   "Canada, Mexico, and the United States are co-hosting the 2026 tournament.",
@@ -1229,6 +1234,7 @@ export function WorldCupPredictor() {
     const priorityPick = isPriorityPick(match, predictedScore);
     const rowState = locked ? "locked" : lockWarning ? "lock-warning" : priorityPick ? "priority" : needsPick ? "needs-pick" : "";
     const statusCopy = predictionStatusCopy(match);
+    const showDetailedPrivacy = isTodayMatch(match) || nextMatches.some((nextMatch) => nextMatch.id === match.id);
     const revealedPicks = players
       .map((player) => ({
         id: player.id,
@@ -1255,17 +1261,12 @@ export function WorldCupPredictor() {
           <TeamLine match={match} />
           <small className="match-kickoff">{formatKickoff(match)}</small>
           <small className="match-venue">{match.venue && match.city ? `${match.venue}, ${match.city}` : match.city || match.venue}</small>
-          {match.odds?.homeWin || match.odds?.draw || match.odds?.awayWin ? (
-            <small className="match-odds">
-              Odds: {match.homeTeam.code} {formatOdds(match.odds.homeWin)} · Draw {formatOdds(match.odds.draw)} · {match.awayTeam.code}{" "}
-              {formatOdds(match.odds.awayWin)}
-            </small>
-          ) : null}
+          {hasOdds(match) ? <small className="match-odds">{oddsCopy(match)}</small> : null}
           <small className={revealed ? "match-lock open" : locked ? "match-lock locked" : "match-lock"}>
             {statusCopy.summary}
           </small>
-          <small className="privacy-note">{statusCopy.detail}</small>
-          {!revealed && isSupabaseConfigured ? (
+          {showDetailedPrivacy ? <small className="privacy-note">{statusCopy.detail}</small> : null}
+          {showDetailedPrivacy && !revealed && isSupabaseConfigured ? (
             <small className="privacy-note">Other players' exact scores stay private until kickoff.</small>
           ) : null}
         </div>
@@ -1470,6 +1471,7 @@ export function WorldCupPredictor() {
                         {match.venue}, {match.city}
                       </span>
                       <small className="privacy-note">{predictionStatusCopy(match).detail}</small>
+                      {hasOdds(match) ? <small className="match-odds">{oddsCopy(match)}</small> : null}
                     </div>
                     <div className="family-forecast">
                       <strong>Family forecast</strong>
