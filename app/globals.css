@@ -950,7 +950,8 @@ h2 {
 
 .match-kickoff,
 .match-venue,
-.match-odds {
+.match-odds,
+.privacy-note {
   color: var(--muted);
   display: block;
   font-size: 0.78rem;
@@ -967,6 +968,11 @@ h2 {
   color: var(--accent-strong);
   font-weight: 800;
   margin-top: 4px;
+}
+
+.privacy-note {
+  line-height: 1.35;
+  overflow-wrap: anywhere;
 }
 
 .match-lock.locked {

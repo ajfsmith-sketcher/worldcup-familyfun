@@ -285,6 +285,50 @@ const formatLockDeadline = (match: MatchWithState) =>
     ? new Intl.DateTimeFormat("en-GB", { dateStyle: "medium", timeStyle: "short" }).format(new Date(new Date(match.kickoffAt).getTime() - PREDICTION_LOCK_MS))
     : "Lock TBC";
 
+const formatTimeUntil = (targetTime: number) => {
+  const remainingMs = targetTime - Date.now();
+  if (remainingMs <= 0) return "now";
+  const totalMinutes = Math.ceil(remainingMs / 60000);
+  const days = Math.floor(totalMinutes / 1440);
+  const hours = Math.floor((totalMinutes % 1440) / 60);
+  const minutes = totalMinutes % 60;
+
+  if (days > 0) return `${days}d ${hours}h`;
+  if (hours > 0) return `${hours}h ${minutes}m`;
+  return `${minutes}m`;
+};
+
+const predictionStatusCopy = (match: MatchWithState) => {
+  if (!match.kickoffAt) {
+    return {
+      detail: "Family picks stay hidden until kickoff.",
+      summary: "Kickoff and lock time are still TBC."
+    };
+  }
+
+  const kickoffTime = new Date(match.kickoffAt).getTime();
+  const lockTime = kickoffTime - PREDICTION_LOCK_MS;
+
+  if (kickoffTime <= Date.now()) {
+    return {
+      detail: "Everyone's saved picks are visible now.",
+      summary: "Family picks revealed"
+    };
+  }
+
+  if (lockTime <= Date.now()) {
+    return {
+      detail: `Family picks reveal at kickoff in ${formatTimeUntil(kickoffTime)}.`,
+      summary: "Locked"
+    };
+  }
+
+  return {
+    detail: `You can edit for ${formatTimeUntil(lockTime)}. Family picks reveal at kickoff in ${formatTimeUntil(kickoffTime)}.`,
+    summary: `Locks in ${formatTimeUntil(lockTime)}`
+  };
+};
+
 const formatOdds = (value: number | null | undefined) => (typeof value === "number" ? value.toFixed(2) : "-");
 
 const worldCupFunFacts = [
@@ -1118,7 +1162,7 @@ export function WorldCupPredictor() {
     }
     if (!window.confirm("Reset all players, match predictions, and actual scores?")) return;
     const starterPlayer = createPlayer("Alex");
-    setPlayers([starterPlayer]);
+    setPlayers(withCodexPlayer([starterPlayer], matches));
     setPredictionSaveStatus({});
     setActivePlayerId(starterPlayer.id);
     setActiveView("group");
@@ -1184,6 +1228,7 @@ export function WorldCupPredictor() {
     const needsPick = !hasScore(predictedScore) && !locked;
     const priorityPick = isPriorityPick(match, predictedScore);
     const rowState = locked ? "locked" : lockWarning ? "lock-warning" : priorityPick ? "priority" : needsPick ? "needs-pick" : "";
+    const statusCopy = predictionStatusCopy(match);
     const revealedPicks = players
       .map((player) => ({
         id: player.id,
@@ -1217,8 +1262,12 @@ export function WorldCupPredictor() {
             </small>
           ) : null}
           <small className={revealed ? "match-lock open" : locked ? "match-lock locked" : "match-lock"}>
-            {revealed ? "Picks visible" : locked ? "Picks locked, visible at kickoff" : match.kickoffAt ? `Picks lock ${formatLockDeadline(match)}` : "Lock time TBC"}
+            {statusCopy.summary}
           </small>
+          <small className="privacy-note">{statusCopy.detail}</small>
+          {!revealed && isSupabaseConfigured ? (
+            <small className="privacy-note">Other players' exact scores stay private until kickoff.</small>
+          ) : null}
         </div>
         <ScoreInputs
           disabled={!canEditPrediction}
@@ -1402,7 +1451,7 @@ export function WorldCupPredictor() {
                   <p className="eyebrow">Up next</p>
                   <h2>{nextMatches.length === 1 ? "Next match" : "Next matches"}</h2>
                 </div>
-                <span className="badge warning">Locks {formatLockDeadline(nextMatches[0])}</span>
+                <span className="badge warning">{predictionStatusCopy(nextMatches[0]).summary}</span>
               </div>
               <div className="next-match-list">
                 {nextMatches.map((match) => (
@@ -1420,6 +1469,7 @@ export function WorldCupPredictor() {
                       <span>
                         {match.venue}, {match.city}
                       </span>
+                      <small className="privacy-note">{predictionStatusCopy(match).detail}</small>
                     </div>
                     <div className="family-forecast">
                       <strong>Family forecast</strong>

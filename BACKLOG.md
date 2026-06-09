@@ -264,14 +264,19 @@ Remaining:
 
 ### 17. UX Polish For Locked Matches
 
-Status: proposed
+Status: partially implemented
 
 Improve the “private until kickoff” experience:
 
-- Clearer labels for locked picks.
-- “Revealed” view after kickoff.
-- Explain why another player’s pick is hidden.
-- Show countdown to kickoff.
+Implemented:
+- Clearer labels for editable, locked, and revealed picks.
+- Countdown-style lock/reveal copy on match rows.
+- Next-match panel shows lock/reveal status.
+- Explains that other players' exact scores stay private until kickoff.
+
+Remaining:
+- Add a richer “revealed” view/chart after kickoff.
+- Consider live countdown refresh without requiring page reload.
 
 ### 17a. Family Forecast And Fun Facts
 
@@ -305,6 +310,7 @@ Implemented:
 - Full-width quick filters on small phones.
 - Stacked admin result rows on mobile.
 - Tighter tab wrapping on tablet/mobile widths.
+- Verified production page at 390px viewport without horizontal overflow.
 
 Remaining:
 - Verify production sign-in and admin flows on an actual phone.
