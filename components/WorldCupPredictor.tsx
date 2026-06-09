@@ -202,7 +202,65 @@ const worldCupFunFacts = [
   "The Golden Boot is awarded to the tournament's top scorer, with assists used as a tie-breaker in recent tournaments."
 ];
 
-const funFactForMatch = (match: MatchWithState) => worldCupFunFacts[(match.matchNumber ? match.matchNumber - 1 : match.id.length) % worldCupFunFacts.length];
+const teamFunFacts: Record<string, string> = {
+  ALG: "Algeria won the Africa Cup of Nations in 1990 and again in 2019.",
+  ARG: "Argentina's national team is nicknamed La Albiceleste, after its sky-blue and white shirts.",
+  AUS: "Australia moved from the Oceania confederation to the Asian confederation in 2006.",
+  AUT: "Austria finished third at the 1954 World Cup.",
+  BEL: "Belgium's national team is nicknamed the Red Devils.",
+  BIH: "Bosnia and Herzegovina made its World Cup debut in 2014.",
+  BRA: "Brazil is the only nation to have played at every men's World Cup.",
+  CAN: "Canada is co-hosting the men's World Cup for the first time in 2026.",
+  CIV: "Cote d'Ivoire's national team is nicknamed the Elephants.",
+  COL: "Colombia's 2014 run to the quarter-finals is its best men's World Cup finish.",
+  COD: "DR Congo played at the 1974 World Cup as Zaire.",
+  CPV: "Cape Verde qualified for the men's World Cup for the first time for 2026.",
+  CRO: "Croatia reached the World Cup final in 2018 and the semi-finals in 1998 and 2022.",
+  CUW: "Curacao qualified for the men's World Cup for the first time for 2026.",
+  CZE: "Czechia continues the football history of Czechoslovakia, which reached two World Cup finals.",
+  ECU: "Ecuador's first men's World Cup appearance came in 2002.",
+  EGY: "Egypt was the first African team to play at a men's World Cup, appearing in 1934.",
+  ENG: "England won the 1966 World Cup at Wembley Stadium.",
+  ESP: "Spain won the 2010 World Cup, with every knockout win coming by a one-goal margin.",
+  FRA: "France has won the men's World Cup twice, in 1998 and 2018.",
+  GER: "Germany has won the men's World Cup four times.",
+  GHA: "Ghana reached the World Cup quarter-finals in 2010.",
+  HAI: "Haiti played at the 1974 World Cup.",
+  IRN: "Iran's national team is often called Team Melli.",
+  IRQ: "Iraq's only previous men's World Cup appearance was in 1986.",
+  JOR: "Jordan qualified for the men's World Cup for the first time for 2026.",
+  JPN: "Japan has qualified for every men's World Cup since 1998.",
+  KOR: "Korea Republic reached the World Cup semi-finals as a co-host in 2002.",
+  KSA: "Saudi Arabia reached the last 16 on its World Cup debut in 1994.",
+  MAR: "Morocco became the first African team to reach a men's World Cup semi-final in 2022.",
+  MEX: "Mexico is the world's most populous Spanish-speaking country.",
+  NED: "The Netherlands has reached three men's World Cup finals.",
+  NOR: "Norway last played at a men's World Cup in 1998.",
+  NZL: "New Zealand has played at two men's World Cups, in 1982 and 2010.",
+  PAN: "Panama made its men's World Cup debut in 2018.",
+  PAR: "Paraguay reached the World Cup quarter-finals in 2010.",
+  POR: "Portugal's best men's World Cup finish was third place in 1966.",
+  QAT: "Qatar hosted the 2022 World Cup.",
+  RSA: "South Africa hosted the 2010 World Cup, the first men's World Cup held in Africa.",
+  SCO: "Scotland's fans are famously known as the Tartan Army.",
+  SEN: "Senegal reached the World Cup quarter-finals on its tournament debut in 2002.",
+  SUI: "Switzerland hosted the 1954 World Cup.",
+  SWE: "Sweden hosted the 1958 World Cup and reached the final that year.",
+  TUN: "Tunisia earned Africa's first men's World Cup match win in 1978.",
+  TUR: "Turkiye finished third at the 2002 World Cup.",
+  URU: "Uruguay hosted and won the first men's World Cup in 1930.",
+  USA: "The United States hosted the 1994 World Cup and is co-hosting again in 2026.",
+  UZB: "Uzbekistan qualified for the men's World Cup for the first time for 2026."
+};
+
+const funFactForMatch = (match: MatchWithState) => {
+  const teams = [match.homeTeam.code, match.awayTeam.code].filter((code) => teamFunFacts[code]);
+  if (teams.length > 0) {
+    const teamCode = teams[(match.matchNumber ?? match.id.length) % teams.length];
+    return teamFunFacts[teamCode];
+  }
+  return worldCupFunFacts[(match.matchNumber ? match.matchNumber - 1 : match.id.length) % worldCupFunFacts.length];
+};
 
 const teamLatestResult = (teamCode: string, currentMatches: MatchWithState[], results: Record<string, ScorePick>) => {
   const latestMatch = sortMatchesByKickoff(currentMatches)
