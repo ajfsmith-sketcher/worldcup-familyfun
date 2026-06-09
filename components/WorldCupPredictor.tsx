@@ -7,6 +7,7 @@ import {
   arePredictionsRevealed,
   completedCount,
   completion,
+  formatFractionalOdds,
   hasScore,
   isPredictionLocked,
   isPredictionLockWarning,
@@ -329,12 +330,12 @@ const predictionStatusCopy = (match: MatchWithState) => {
   };
 };
 
-const formatOdds = (value: number | null | undefined) => (typeof value === "number" ? value.toFixed(2) : "-");
-
 const hasOdds = (match: MatchWithState) => Boolean(match.odds?.homeWin || match.odds?.draw || match.odds?.awayWin);
 
 const oddsCopy = (match: MatchWithState) =>
-  `Odds: ${match.homeTeam.code} ${formatOdds(match.odds?.homeWin)} · Draw ${formatOdds(match.odds?.draw)} · ${match.awayTeam.code} ${formatOdds(match.odds?.awayWin)}`;
+  `Odds: ${match.homeTeam.code} ${formatFractionalOdds(match.odds?.homeWin)} · Draw ${formatFractionalOdds(
+    match.odds?.draw
+  )} · ${match.awayTeam.code} ${formatFractionalOdds(match.odds?.awayWin)}`;
 
 const worldCupFunFacts = [
   "The 2026 World Cup is the first edition planned for 48 teams.",

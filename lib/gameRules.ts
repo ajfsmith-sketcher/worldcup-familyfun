@@ -46,6 +46,21 @@ export const completion = <Match extends GameMatch>(scores: Record<string, Score
 export const scorePlayer = <Match extends GameMatch>(player: GamePlayer, results: Record<string, ScorePick>, matches: Match[]) =>
   matches.reduce((total, match) => total + matchPoints(player.matchPredictions[match.id], results[match.id]), 0);
 
+const greatestCommonDivisor = (left: number, right: number): number => {
+  const remainder = left % right;
+  return remainder === 0 ? right : greatestCommonDivisor(right, remainder);
+};
+
+export const formatFractionalOdds = (value: number | null | undefined) => {
+  if (typeof value !== "number" || !Number.isFinite(value) || value <= 1) return "-";
+
+  const numerator = Math.round((value - 1) * 100);
+  const denominator = 100;
+  const divisor = greatestCommonDivisor(numerator, denominator);
+
+  return `${numerator / divisor}/${denominator / divisor}`;
+};
+
 export const isPredictionLocked = (match: GameMatch) =>
   Boolean(match.kickoffAt && new Date(match.kickoffAt).getTime() - PREDICTION_LOCK_MS <= Date.now());
 

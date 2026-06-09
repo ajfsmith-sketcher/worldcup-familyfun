@@ -3,6 +3,7 @@ import {
   arePredictionsRevealed,
   completedCount,
   completion,
+  formatFractionalOdds,
   isPredictionLocked,
   isPredictionLockWarning,
   matchPoints,
@@ -61,6 +62,22 @@ describe("player scoring and completion", () => {
     expect(scorePlayer(player, results, matches)).toBe(4);
     expect(completedCount(player.matchPredictions, matches)).toBe(2);
     expect(completion(player.matchPredictions, matches)).toBe(67);
+  });
+});
+
+describe("formatFractionalOdds", () => {
+  it("formats decimal odds as simplified UK fractional odds", () => {
+    expect(formatFractionalOdds(1.47)).toBe("47/100");
+    expect(formatFractionalOdds(4.11)).toBe("311/100");
+    expect(formatFractionalOdds(6.79)).toBe("579/100");
+    expect(formatFractionalOdds(2.5)).toBe("3/2");
+    expect(formatFractionalOdds(3)).toBe("2/1");
+  });
+
+  it("uses a dash when odds are missing or invalid", () => {
+    expect(formatFractionalOdds(null)).toBe("-");
+    expect(formatFractionalOdds(undefined)).toBe("-");
+    expect(formatFractionalOdds(1)).toBe("-");
   });
 });
 
