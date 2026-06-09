@@ -157,6 +157,8 @@ type SavedState = {
 const STORAGE_KEY = "world-cup-2026-family-predictor";
 const NEXT_UPCOMING_MATCH_COUNT = 8;
 const FAMILY_FORECAST_MINIMUM_PICKS = 4;
+const CODEX_PLAYER_ID = "codex-var-dex";
+const CODEX_PLAYER_NAME = "VAR-dex";
 
 const emptyScore = (): ScorePick => ({ away: "", home: "" });
 
@@ -175,6 +177,100 @@ const createPlayer = (name: string): Player => ({
   name,
   nextPendingCount: 0
 });
+
+const codexTeamRatings: Record<string, number> = {
+  ARG: 94,
+  BRA: 93,
+  ENG: 91,
+  ESP: 91,
+  FRA: 94,
+  GER: 90,
+  NED: 89,
+  POR: 90,
+  BEL: 88,
+  CRO: 86,
+  URU: 86,
+  COL: 85,
+  MAR: 84,
+  USA: 82,
+  SUI: 82,
+  JPN: 82,
+  SEN: 82,
+  MEX: 81,
+  KOR: 80,
+  SWE: 80,
+  ECU: 79,
+  AUT: 79,
+  TUR: 79,
+  CIV: 78,
+  GHA: 77,
+  PAR: 77,
+  NOR: 77,
+  CAN: 76,
+  ALG: 76,
+  AUS: 75,
+  EGY: 75,
+  IRN: 75,
+  RSA: 73,
+  TUN: 73,
+  KSA: 72,
+  SCO: 72,
+  PAN: 71,
+  UZB: 70,
+  BIH: 70,
+  CPV: 69,
+  CZE: 69,
+  JOR: 68,
+  IRQ: 68,
+  QAT: 67,
+  NZL: 67,
+  COD: 67,
+  CUW: 66,
+  HAI: 65
+};
+
+const fallbackCodexRating = (teamCode: string, matchNumber: number) =>
+  68 + ((teamCode.split("").reduce((total, char) => total + char.charCodeAt(0), 0) + matchNumber) % 10);
+
+const codexScoreForMatch = (match: MatchWithState): ScorePick => {
+  const homeRating = codexTeamRatings[match.homeTeam.code] ?? fallbackCodexRating(match.homeTeam.code, match.matchNumber);
+  const awayRating = codexTeamRatings[match.awayTeam.code] ?? fallbackCodexRating(match.awayTeam.code, match.matchNumber + 3);
+  const homeEdge = homeRating + (match.round === "Group stage" ? 1 : 0) - awayRating;
+  const bonusGoal = match.matchNumber % 5 === 0 ? 1 : 0;
+
+  if (homeEdge >= 16) return { away: "0", home: String(3 + bonusGoal) };
+  if (homeEdge >= 8) return { away: "1", home: "2" };
+  if (homeEdge >= 3) return { away: match.matchNumber % 4 === 0 ? "0" : "1", home: "2" };
+  if (homeEdge <= -16) return { away: String(3 + bonusGoal), home: "0" };
+  if (homeEdge <= -8) return { away: "2", home: "1" };
+  if (homeEdge <= -3) return { away: "2", home: match.matchNumber % 4 === 0 ? "0" : "1" };
+  return match.matchNumber % 3 === 0 ? { away: "2", home: "2" } : { away: "1", home: "1" };
+};
+
+const createCodexPlayer = (matches: MatchWithState[]): Player => {
+  const matchPredictions = matches.reduce(
+    (predictions, match) => ({
+      ...predictions,
+      [match.id]: codexScoreForMatch(match)
+    }),
+    {} as Record<string, ScorePick>
+  );
+
+  return {
+    groupPredictionCount: matches.filter((match) => match.round === "Group stage").length,
+    id: CODEX_PLAYER_ID,
+    knockoutPredictionCount: matches.filter((match) => match.round !== "Group stage").length,
+    matchPredictions,
+    name: CODEX_PLAYER_NAME,
+    nextPendingCount: nextPendingCount(matchPredictions, matches),
+    predictionCount: matches.length
+  };
+};
+
+const withCodexPlayer = (currentPlayers: Player[], matches: MatchWithState[]) => [
+  ...currentPlayers.filter((player) => player.id !== CODEX_PLAYER_ID),
+  createCodexPlayer(matches)
+];
 
 const normalizeScore = (score: ScorePick | undefined): ScorePick => ({
   away: score?.away ?? "",
@@ -575,7 +671,8 @@ export function WorldCupPredictor() {
         const parsed = JSON.parse(saved) as Partial<SavedState>;
           const migratedPlayers = migratePlayers(parsed.players);
           if (migratedPlayers && migratedPlayers.length > 0) {
-            setPlayers(migratedPlayers);
+            const restoredPlayers = withCodexPlayer(migratedPlayers, worldCupMatches);
+            setPlayers(restoredPlayers);
             setActivePlayerId(parsed.activePlayerId || migratedPlayers[0].id);
             setActiveView(parsed.activeView === "date" ? "date" : "group");
             setActiveDateFilter(typeof parsed.activeDateFilter === "string" ? parsed.activeDateFilter : "all");
@@ -595,7 +692,7 @@ export function WorldCupPredictor() {
         // Fall through to starter players.
       }
     }
-    const starterPlayers = ["Alex", "Family"].map(createPlayer);
+    const starterPlayers = withCodexPlayer(["Alex", "Family"].map(createPlayer), worldCupMatches);
     setPlayers(starterPlayers);
     setActivePlayerId(starterPlayers[0].id);
   };
@@ -674,7 +771,7 @@ export function WorldCupPredictor() {
 
     setMatches(sharedMatches);
     setResults(sharedResults);
-    setPlayers(sharedPlayers);
+    setPlayers(withCodexPlayer(sharedPlayers, sharedMatches));
     setScorers((scorerResponse.data ?? []) as ScorerRow[]);
     setFamilyForecasts(forecastResponse.error ? {} : forecastFromRows(forecastResponse.data as ForecastRow[] | null));
     setPredictionSaveStatus(currentPlayerSaveStatus);
