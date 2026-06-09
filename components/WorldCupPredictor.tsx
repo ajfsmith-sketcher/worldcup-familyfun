@@ -30,11 +30,12 @@ import {
 } from "@/lib/worldCup2026";
 
 type ViewMode = "group" | "date";
-type WorkspaceTab = "groups" | "knockouts" | "scorers" | "family";
+type WorkspaceTab = "groups" | "knockouts" | "scorers" | "family" | "admin";
 type DateFilter = "all" | "today" | string;
 type GroupFilter = "all" | GroupId;
 type TeamFilter = "all" | string;
 type SaveStatus = "idle" | "saving" | "saved" | "error";
+type AdminResultFilter = "needs-result" | "unscored" | "scored" | "all";
 
 type Player = {
   groupPredictionCount?: number;
@@ -204,6 +205,8 @@ const isTodayMatch = (match: MatchWithState) => match.kickoffAt && matchDateKey(
 const hasCompletedResult = (match: MatchWithState, results: Record<string, ScorePick>) => hasScore(results[match.id]);
 
 const isUpcomingMatch = (match: MatchWithState) => !match.kickoffAt || new Date(match.kickoffAt).getTime() > Date.now();
+
+const hasKickedOff = (match: MatchWithState) => Boolean(match.kickoffAt && new Date(match.kickoffAt).getTime() <= Date.now());
 
 const isPriorityPick = (match: MatchWithState, score: ScorePick | undefined) => {
   if (!match.kickoffAt || hasScore(score) || isPredictionLocked(match)) return false;
@@ -389,6 +392,7 @@ export function WorldCupPredictor() {
   const [hideCompleted, setHideCompleted] = useState(false);
   const [showMissingOnly, setShowMissingOnly] = useState(false);
   const [filtersCollapsed, setFiltersCollapsed] = useState(false);
+  const [adminResultFilter, setAdminResultFilter] = useState<AdminResultFilter>("needs-result");
   const [results, setResults] = useState<Record<string, ScorePick>>(emptyMatchScores);
   const [predictionSaveStatus, setPredictionSaveStatus] = useState<Record<string, PredictionSaveState>>({});
   const [newPlayerName, setNewPlayerName] = useState("");
@@ -635,6 +639,19 @@ export function WorldCupPredictor() {
   const resultCount = completedCount(results, matches);
   const activeGroupPickCount = activePlayer ? completedCount(activePlayer.matchPredictions, groupStageMatchList) : 0;
   const activeKnockoutPickCount = activePlayer ? completedCount(activePlayer.matchPredictions, knockoutMatchList) : 0;
+  const scoredMatches = useMemo(() => matches.filter((match) => hasCompletedResult(match, results)), [matches, results]);
+  const unscoredMatches = useMemo(() => matches.filter((match) => !hasCompletedResult(match, results)), [matches, results]);
+  const adminNeedsResultCount = useMemo(
+    () => unscoredMatches.filter((match) => hasKickedOff(match)).length,
+    [unscoredMatches]
+  );
+  const adminResultMatches = useMemo(() => {
+    const sortedMatches = sortMatchesByKickoff(matches);
+    if (adminResultFilter === "needs-result") return sortedMatches.filter((match) => hasKickedOff(match) && !hasCompletedResult(match, results));
+    if (adminResultFilter === "unscored") return sortedMatches.filter((match) => !hasCompletedResult(match, results));
+    if (adminResultFilter === "scored") return sortedMatches.filter((match) => hasCompletedResult(match, results));
+    return sortedMatches;
+  }, [adminResultFilter, matches, results]);
 
   const standings = useMemo(
     () =>
@@ -977,6 +994,40 @@ export function WorldCupPredictor() {
     );
   };
 
+  const renderAdminResultRow = (match: MatchWithState) => {
+    const actualScore = normalizeScore(results[match.id]);
+    const scored = hasScore(actualScore);
+    const needsResult = hasKickedOff(match) && !scored;
+
+    return (
+      <article className={`admin-result-row ${needsResult ? "needs-result" : scored ? "scored" : ""}`} key={match.id}>
+        <div>
+          <div className="match-meta">
+            <p className="eyebrow">{match.label}</p>
+            {needsResult ? <span className="urgency-badge danger">Needs result</span> : scored ? <span className="urgency-badge soft">Scored</span> : null}
+          </div>
+          <TeamLine match={match} />
+          <small className="match-kickoff">{formatKickoff(match)}</small>
+          <small className="match-venue">{match.venue && match.city ? `${match.venue}, ${match.city}` : match.city || match.venue}</small>
+          {match.scoreStatus ? <small className="match-odds">Provider status: {match.scoreStatus}</small> : null}
+          {match.lastSyncedAt ? (
+            <small className="match-venue">Last synced {new Intl.DateTimeFormat("en-GB", { dateStyle: "medium", timeStyle: "short" }).format(new Date(match.lastSyncedAt))}</small>
+          ) : null}
+        </div>
+        <ScoreInputs
+          disabled={!isAdmin}
+          label={`Admin actual score for ${match.label}`}
+          match={match}
+          onChange={(score) => updateResultScore(match.id, score)}
+          score={actualScore}
+        />
+        <button className="text-button admin-clear-button" disabled={!scored} onClick={() => updateResultScore(match.id, emptyScore())} type="button">
+          Clear
+        </button>
+      </article>
+    );
+  };
+
   if (!isLoaded) {
     return (
       <main className="shell predictor-shell">
@@ -1071,6 +1122,11 @@ export function WorldCupPredictor() {
             <button className={activeWorkspaceTab === "family" ? "active" : ""} onClick={() => setActiveWorkspaceTab("family")} type="button">
               Family table
             </button>
+            {isAdmin ? (
+              <button className={activeWorkspaceTab === "admin" ? "active" : ""} onClick={() => setActiveWorkspaceTab("admin")} type="button">
+                Admin
+              </button>
+            ) : null}
           </div>
 
           {nextMatches.length > 0 ? (
@@ -1436,6 +1492,63 @@ export function WorldCupPredictor() {
                   </article>
                 ))}
               </div>
+              </section>
+            ) : null}
+
+            {activeWorkspaceTab === "admin" && isAdmin ? (
+              <section className="panel">
+                <div className="section-heading">
+                  <div>
+                    <p className="eyebrow">Admin console</p>
+                    <h2>Result entry</h2>
+                  </div>
+                  <button className="button" disabled={isSyncingScores} onClick={syncScores} type="button">
+                    {isSyncingScores ? "Syncing..." : "Sync scores"}
+                  </button>
+                </div>
+
+                <div className="admin-stat-grid">
+                  <div>
+                    <span>Needs result</span>
+                    <strong>{adminNeedsResultCount}</strong>
+                  </div>
+                  <div>
+                    <span>Scored</span>
+                    <strong>{scoredMatches.length}</strong>
+                  </div>
+                  <div>
+                    <span>Unscored</span>
+                    <strong>{unscoredMatches.length}</strong>
+                  </div>
+                </div>
+
+                <div className="match-filters compact">
+                  <div className="filter-select-grid admin-filter-grid">
+                    <label>
+                      <span>Result view</span>
+                      <select
+                        aria-label="Filter admin result rows"
+                        onChange={(event) => setAdminResultFilter(event.target.value as AdminResultFilter)}
+                        value={adminResultFilter}
+                      >
+                        <option value="needs-result">Needs result</option>
+                        <option value="unscored">All unscored</option>
+                        <option value="scored">Scored</option>
+                        <option value="all">All matches</option>
+                      </select>
+                    </label>
+                  </div>
+                  <p className="filter-summary">
+                    {adminResultMatches.length} {adminResultMatches.length === 1 ? "match" : "matches"} shown
+                  </p>
+                </div>
+
+                <div className="admin-result-list">
+                  {adminResultMatches.length === 0 ? <p className="empty">No matches in this admin view.</p> : null}
+                  {adminResultMatches.map(renderAdminResultRow)}
+                </div>
+                {syncMessage ? <p className="sync-message">{syncMessage}</p> : null}
+                {scoreSyncMessage ? <p className="sync-message">{scoreSyncMessage}</p> : null}
               </section>
             ) : null}
           </div>

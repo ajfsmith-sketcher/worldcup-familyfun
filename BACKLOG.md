@@ -247,13 +247,17 @@ Optional: add a friendlier custom domain or subdomain.
 
 ### 16. Better Admin Surface
 
-Status: proposed
+Status: partially implemented
 
-Current admin result editing is inline in the match table.
+Current admin result editing is available inline in the match table and in a dedicated Admin tab for admin users.
 
-Possible admin improvements:
-- Dedicated result-entry page.
-- Only show finished/unscored matches.
+Implemented:
+- Dedicated admin result-entry tab.
+- Result filters for needs result, all unscored, scored, and all matches.
+- Admin score sync button in the admin surface.
+- Clear button for manually entered actual scores.
+
+Remaining:
 - Bulk import actual results.
 - Audit trail for result changes.
 
@@ -270,7 +274,7 @@ Improve the “private until kickoff” experience:
 
 ### 18. Mobile Pass
 
-Status: proposed
+Status: partially implemented
 
 The app is responsive, but needs a proper phone walkthrough:
 
@@ -278,6 +282,15 @@ The app is responsive, but needs a proper phone walkthrough:
 - Score input ergonomics.
 - Leaderboard scanning.
 - Long match list navigation.
+
+Implemented:
+- Narrow-screen spacing pass.
+- Full-width quick filters on small phones.
+- Stacked admin result rows on mobile.
+- Tighter tab wrapping on tablet/mobile widths.
+
+Remaining:
+- Verify production sign-in and admin flows on an actual phone.
 
 ### 19. Tests
 

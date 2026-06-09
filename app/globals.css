@@ -604,6 +604,69 @@ h2 {
   font-weight: 800;
 }
 
+.admin-stat-grid {
+  display: grid;
+  gap: 10px;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  margin-bottom: 16px;
+}
+
+.admin-stat-grid div {
+  background: var(--surface-muted);
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  display: grid;
+  gap: 4px;
+  padding: 12px;
+}
+
+.admin-stat-grid span {
+  color: var(--muted);
+  font-size: 0.75rem;
+  font-weight: 900;
+  text-transform: uppercase;
+}
+
+.admin-stat-grid strong {
+  font-size: 1.6rem;
+}
+
+.admin-filter-grid {
+  grid-template-columns: minmax(220px, 360px);
+}
+
+.admin-result-list {
+  display: grid;
+  gap: 10px;
+}
+
+.admin-result-row {
+  align-items: center;
+  background: var(--surface-muted);
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  display: grid;
+  gap: 12px;
+  grid-template-columns: minmax(260px, 1fr) minmax(190px, 260px) auto;
+  padding: 12px;
+}
+
+.admin-result-row.needs-result {
+  background: #fff1f2;
+  border-color: #f3a2ad;
+}
+
+.admin-result-row.scored {
+  background: #ecf8ef;
+  border-color: #bfe6c9;
+}
+
+.admin-clear-button:disabled {
+  color: var(--muted);
+  cursor: default;
+  opacity: 0.55;
+}
+
 .filter-summary {
   color: var(--muted);
   font-size: 0.86rem;
@@ -1007,6 +1070,8 @@ h2 {
   .auth-panel,
   .predictor-hero,
   .predictor-grid,
+  .admin-stat-grid,
+  .admin-result-row,
   .filter-select-grid,
   .match-row,
   .next-match-card,
@@ -1018,6 +1083,15 @@ h2 {
 
   .match-table-head {
     display: none;
+  }
+
+  .view-tabs {
+    gap: 6px;
+  }
+
+  .view-tabs button {
+    flex-basis: calc(50% - 6px);
+    padding: 0 8px;
   }
 
   .group-table {
@@ -1037,7 +1111,50 @@ h2 {
     justify-self: start;
   }
 
+  .score-entry {
+    grid-template-columns: minmax(0, 1fr) auto minmax(0, 1fr);
+    width: 100%;
+  }
+
+  .admin-clear-button {
+    justify-self: start;
+  }
+
   .shell {
     padding-top: 22px;
+  }
+}
+
+@media (max-width: 520px) {
+  .shell {
+    padding-left: 12px;
+    padding-right: 12px;
+  }
+
+  .panel,
+  .predictor-hero {
+    padding: 14px;
+  }
+
+  .predictor-hero {
+    min-height: auto;
+  }
+
+  .pitch-visual {
+    min-height: 190px;
+  }
+
+  .view-tabs button {
+    flex-basis: 100%;
+  }
+
+  .quick-filters label {
+    width: 100%;
+  }
+
+  .match-row,
+  .admin-result-row,
+  .next-match-card {
+    padding: 10px;
   }
 }
