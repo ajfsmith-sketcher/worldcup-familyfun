@@ -19,6 +19,7 @@ Last reviewed: 2026-06-08
 - Knockout rounds are available as bracket-placeholder fixtures.
 - A scorers tab is available and wired to provider-synced scorer data.
 - Group-stage and knockout predictions are split into separate tabs and progress counts.
+- The next-match panel includes a privacy-safe family forecast and rotating World Cup fun facts.
 
 ## Needs Confirmation
 
@@ -271,6 +272,22 @@ Improve the “private until kickoff” experience:
 - “Revealed” view after kickoff.
 - Explain why another player’s pick is hidden.
 - Show countdown to kickoff.
+
+### 17a. Family Forecast And Fun Facts
+
+Status: partially implemented
+
+Implemented:
+- Next-match cards show anonymous family forecast data when enough people have picked.
+- Forecasts require at least 4 picks.
+- Before kickoff, a player must make their own pick before seeing the aggregate family lean.
+- Forecasts show the most popular result and top scoreline without naming individual players.
+- Next-match cards show stable World Cup fun facts.
+
+Remaining:
+- Add richer country, stadium, and team-specific facts.
+- Decide whether family forecast should also appear on each match row.
+- Consider a post-kickoff breakdown chart once picks are public.
 
 ### 18. Mobile Pass
 

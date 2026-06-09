@@ -103,6 +103,27 @@ type PredictionStatusRow = {
   prediction_count: number;
 };
 
+type ForecastRow = {
+  away_result_picks: number;
+  draw_result_picks: number;
+  home_result_picks: number;
+  match_id: string;
+  top_score_away: number | null;
+  top_score_home: number | null;
+  top_score_picks: number | null;
+  total_picks: number;
+};
+
+type FamilyForecast = {
+  awayResultPicks: number;
+  drawResultPicks: number;
+  homeResultPicks: number;
+  topScoreAway: number | null;
+  topScoreHome: number | null;
+  topScorePicks: number | null;
+  totalPicks: number;
+};
+
 type ScorerRow = {
   assists: number | null;
   goals: number;
@@ -135,6 +156,7 @@ type SavedState = {
 
 const STORAGE_KEY = "world-cup-2026-family-predictor";
 const NEXT_UPCOMING_MATCH_COUNT = 8;
+const FAMILY_FORECAST_MINIMUM_PICKS = 4;
 
 const emptyScore = (): ScorePick => ({ away: "", home: "" });
 
@@ -168,6 +190,19 @@ const formatLockDeadline = (match: MatchWithState) =>
     : "Lock TBC";
 
 const formatOdds = (value: number | null | undefined) => (typeof value === "number" ? value.toFixed(2) : "-");
+
+const worldCupFunFacts = [
+  "The 2026 World Cup is the first edition planned for 48 teams.",
+  "Canada, Mexico, and the United States are co-hosting the 2026 tournament.",
+  "Mexico City is set to become the first city to host matches in three different men's World Cups.",
+  "The 2026 tournament format includes 12 groups of four teams.",
+  "The final is scheduled for MetLife Stadium in the New York/New Jersey area.",
+  "The group stage alone has 72 matches, which is enough for a serious family leaderboard swing.",
+  "Penalty shoot-outs decide knockout ties after extra time, but official match scores can be recorded differently by providers.",
+  "The Golden Boot is awarded to the tournament's top scorer, with assists used as a tie-breaker in recent tournaments."
+];
+
+const funFactForMatch = (match: MatchWithState) => worldCupFunFacts[(match.matchNumber ? match.matchNumber - 1 : match.id.length) % worldCupFunFacts.length];
 
 const teamLatestResult = (teamCode: string, currentMatches: MatchWithState[], results: Record<string, ScorePick>) => {
   const latestMatch = sortMatchesByKickoff(currentMatches)
@@ -207,6 +242,72 @@ const hasCompletedResult = (match: MatchWithState, results: Record<string, Score
 const isUpcomingMatch = (match: MatchWithState) => !match.kickoffAt || new Date(match.kickoffAt).getTime() > Date.now();
 
 const hasKickedOff = (match: MatchWithState) => Boolean(match.kickoffAt && new Date(match.kickoffAt).getTime() <= Date.now());
+
+const resultLabelForForecast = (match: MatchWithState, forecast: FamilyForecast) => {
+  const resultCounts = [
+    { label: match.homeTeam.name, picks: forecast.homeResultPicks },
+    { label: "Draw", picks: forecast.drawResultPicks },
+    { label: match.awayTeam.name, picks: forecast.awayResultPicks }
+  ].sort((a, b) => b.picks - a.picks || a.label.localeCompare(b.label));
+
+  const [leader, second] = resultCounts;
+  if (!leader || leader.picks === 0) return "No clear lean yet";
+  if (second && leader.picks === second.picks) return "Split decision";
+  return `${leader.label} leads`;
+};
+
+const forecastFromRows = (rows: ForecastRow[] | null | undefined) =>
+  (rows ?? []).reduce(
+    (forecasts, row) => ({
+      ...forecasts,
+      [row.match_id]: {
+        awayResultPicks: row.away_result_picks,
+        drawResultPicks: row.draw_result_picks,
+        homeResultPicks: row.home_result_picks,
+        topScoreAway: row.top_score_away,
+        topScoreHome: row.top_score_home,
+        topScorePicks: row.top_score_picks,
+        totalPicks: row.total_picks
+      }
+    }),
+    {} as Record<string, FamilyForecast>
+  );
+
+const localForecastsFromPlayers = (currentPlayers: Player[], currentMatches: MatchWithState[], activePlayer: Player | undefined) => {
+  if (!activePlayer) return {};
+  return currentMatches.reduce(
+    (forecasts, match) => {
+      const activePlayerPicked = hasScore(activePlayer.matchPredictions[match.id]);
+      if (!activePlayerPicked && !arePredictionsRevealed(match)) return forecasts;
+
+      const picks = currentPlayers
+        .map((player) => normalizeScore(player.matchPredictions[match.id]))
+        .filter(hasScore);
+      if (picks.length < FAMILY_FORECAST_MINIMUM_PICKS) return forecasts;
+
+      const scoreCounts = new Map<string, { away: number; count: number; home: number }>();
+      picks.forEach((pick) => {
+        const home = Number(pick.home);
+        const away = Number(pick.away);
+        const key = `${home}-${away}`;
+        scoreCounts.set(key, { away, count: (scoreCounts.get(key)?.count ?? 0) + 1, home });
+      });
+      const topScore = Array.from(scoreCounts.values()).sort((a, b) => b.count - a.count || a.home - b.home || a.away - b.away)[0];
+
+      forecasts[match.id] = {
+        awayResultPicks: picks.filter((pick) => Number(pick.home) < Number(pick.away)).length,
+        drawResultPicks: picks.filter((pick) => Number(pick.home) === Number(pick.away)).length,
+        homeResultPicks: picks.filter((pick) => Number(pick.home) > Number(pick.away)).length,
+        topScoreAway: topScore?.away ?? null,
+        topScoreHome: topScore?.home ?? null,
+        topScorePicks: topScore?.count ?? null,
+        totalPicks: picks.length
+      };
+      return forecasts;
+    },
+    {} as Record<string, FamilyForecast>
+  );
+};
 
 const isPriorityPick = (match: MatchWithState, score: ScorePick | undefined) => {
   if (!match.kickoffAt || hasScore(score) || isPredictionLocked(match)) return false;
@@ -382,6 +483,7 @@ export function WorldCupPredictor() {
   const [players, setPlayers] = useState<Player[]>([]);
   const [matches, setMatches] = useState<MatchWithState[]>(worldCupMatches);
   const [scorers, setScorers] = useState<ScorerRow[]>([]);
+  const [familyForecasts, setFamilyForecasts] = useState<Record<string, FamilyForecast>>({});
   const [activePlayerId, setActivePlayerId] = useState("");
   const [activeWorkspaceTab, setActiveWorkspaceTab] = useState<WorkspaceTab>("groups");
   const [activeView, setActiveView] = useState<ViewMode>("group");
@@ -444,12 +546,13 @@ export function WorldCupPredictor() {
     if (!supabase) return;
     setSyncMessage("Syncing shared game...");
 
-    const [playerResponse, matchResponse, predictionResponse, statusResponse, scorerResponse] = await Promise.all([
+    const [playerResponse, matchResponse, predictionResponse, statusResponse, scorerResponse, forecastResponse] = await Promise.all([
       supabase.from("players").select("id, display_name").order("display_name"),
       supabase.from("matches").select("*").order("match_number", { nullsFirst: false }),
       supabase.from("predictions").select("player_id, match_id, home_score, away_score"),
       supabase.rpc("player_prediction_status"),
-      supabase.from("tournament_scorers").select("*").order("goals", { ascending: false }).order("player_name")
+      supabase.from("tournament_scorers").select("*").order("goals", { ascending: false }).order("player_name"),
+      supabase.rpc("family_match_forecasts", { minimum_picks: FAMILY_FORECAST_MINIMUM_PICKS })
     ]);
 
     if (playerResponse.error || matchResponse.error || predictionResponse.error || statusResponse.error || scorerResponse.error) {
@@ -515,6 +618,7 @@ export function WorldCupPredictor() {
     setResults(sharedResults);
     setPlayers(sharedPlayers);
     setScorers((scorerResponse.data ?? []) as ScorerRow[]);
+    setFamilyForecasts(forecastResponse.error ? {} : forecastFromRows(forecastResponse.data as ForecastRow[] | null));
     setPredictionSaveStatus(currentPlayerSaveStatus);
     setActivePlayerId(currentSession.user.id);
     setSyncMessage("Shared game synced.");
@@ -545,6 +649,7 @@ export function WorldCupPredictor() {
       } else {
         setPlayers([]);
         setScorers([]);
+        setFamilyForecasts({});
         setActivePlayerId("");
         setProfileReady(false);
       }
@@ -574,6 +679,10 @@ export function WorldCupPredictor() {
   }, [activeDateFilter, activeGroupFilter, activePlayerId, activeTeamFilter, activeView, filtersCollapsed, hideCompleted, isLoaded, players, results, showMissingOnly, showUpcomingOnly]);
 
   const activePlayer = players.find((player) => player.id === activePlayerId) ?? players[0];
+  const visibleFamilyForecasts = useMemo(
+    () => (isSupabaseConfigured ? familyForecasts : localForecastsFromPlayers(players, matches, activePlayer)),
+    [activePlayer, familyForecasts, matches, players]
+  );
   const todayKey = toDateKey(new Date());
   const teamOptions = useMemo(
     () =>
@@ -1156,6 +1265,32 @@ export function WorldCupPredictor() {
                       <span>
                         {match.venue}, {match.city}
                       </span>
+                    </div>
+                    <div className="family-forecast">
+                      <strong>Family forecast</strong>
+                      {visibleFamilyForecasts[match.id] ? (
+                        <>
+                          <span>
+                            {resultLabelForForecast(match, visibleFamilyForecasts[match.id])} from {visibleFamilyForecasts[match.id].totalPicks} picks
+                          </span>
+                          {visibleFamilyForecasts[match.id].topScoreHome !== null && visibleFamilyForecasts[match.id].topScoreAway !== null ? (
+                            <small>
+                              Top score: {visibleFamilyForecasts[match.id].topScoreHome}-{visibleFamilyForecasts[match.id].topScoreAway}
+                              {visibleFamilyForecasts[match.id].topScorePicks ? ` (${visibleFamilyForecasts[match.id].topScorePicks} picks)` : ""}
+                            </small>
+                          ) : null}
+                        </>
+                      ) : (
+                        <span>
+                          {hasScore(activePlayer?.matchPredictions[match.id])
+                            ? `${FAMILY_FORECAST_MINIMUM_PICKS}+ family picks needed for a forecast`
+                            : "Make your pick to unlock the family lean"}
+                        </span>
+                      )}
+                    </div>
+                    <div className="fun-fact">
+                      <strong>Fun fact</strong>
+                      <span>{funFactForMatch(match)}</span>
                     </div>
                   </article>
                 ))}

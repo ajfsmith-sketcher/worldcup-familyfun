@@ -517,6 +517,32 @@ h2 {
   overflow-wrap: anywhere;
 }
 
+.family-forecast,
+.fun-fact {
+  background: #fff;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  grid-column: 1 / -1;
+  padding: 10px;
+}
+
+.family-forecast strong,
+.fun-fact strong {
+  color: var(--accent-strong);
+  font-size: 0.78rem;
+  text-transform: uppercase;
+}
+
+.family-forecast small {
+  color: var(--muted);
+  font-size: 0.82rem;
+  font-weight: 800;
+}
+
+.fun-fact {
+  background: #fbfcfc;
+}
+
 .match-filters {
   background: #fbfcfc;
   border: 1px solid var(--line);
