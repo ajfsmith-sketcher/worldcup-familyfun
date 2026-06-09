@@ -14,7 +14,7 @@ Last reviewed: 2026-06-08
 - Group-stage match rows are seeded with official match numbers, kickoff times, venues, and cities.
 - Picks and family leaderboard are split into separate app tabs.
 - The app highlights the next match or simultaneous next matches near the top of the page.
-- Vercel Cron is configured to call score sync hourly.
+- Vercel Cron is configured to call score sync daily on the Hobby plan.
 - Automated tests cover scoring, lock timing, reveal timing, completion, and next-match logic.
 - Knockout rounds are available as bracket-placeholder fixtures.
 - A scorers tab is available and wired to provider-synced scorer data.
@@ -175,13 +175,14 @@ Implementation notes:
 - Test `GET https://api.football-data.org/v4/competitions/WC/matches?season=2026` once 2026 fixtures/results are available.
 - External mapping fields and odds fields have been added to `matches`.
 - A protected `/api/sync-scores` route pulls scores/odds and writes actual scores into Supabase for admin users.
-- Vercel Cron is configured to call `/api/sync-scores` hourly.
+- Vercel Cron is configured to call `/api/sync-scores` daily because Vercel Hobby does not allow hourly cron jobs.
 - Cron calls require `CRON_SECRET` as a bearer token.
 - `CRON_SECRET` has been added in Vercel.
 - `last_synced_at` shows when scores were last updated.
 
 Remaining:
-- Confirm the production cron invocation after the next deployment.
+- Confirm the production daily cron invocation after the next deployment.
+- Decide whether to upgrade Vercel or use another scheduler for more frequent score checks during the tournament.
 - Re-test once football-data.org has final/live 2026 match data available.
 
 ### 11. Add Knockout Rounds
@@ -325,7 +326,7 @@ Do not run `npm audit fix --force` blindly. Review whether the affected packages
 - Added an up-next panel for the next match or simultaneous next matches.
 - Fixed laptop-width family leaderboard overflow.
 - Added automated tests for game scoring and timing rules.
-- Added cron-safe score sync route and Vercel hourly cron config.
+- Added cron-safe score sync route and Vercel daily cron config.
 - Added knockout-round fixtures and a Knockouts tab.
 - Added tournament scorer storage, sync attempt, and Scorers tab.
 - Split group-game and knockout prediction progress, added collapsible filters, and added missing-score quick filters.
