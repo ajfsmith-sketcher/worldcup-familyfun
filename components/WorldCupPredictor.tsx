@@ -1046,11 +1046,13 @@ export function WorldCupPredictor() {
             Pick the score for every World Cup game. Earn 1 point for the home score, 1 for the away score, and 1 for
             the match result. Picks turn amber two hours before kickoff, lock one hour before kickoff, and stay private until the match starts.
           </p>
-          <div className="action-row predictor-actions">
-            <button className="button secondary" onClick={resetGame} type="button">
-              Reset game
-            </button>
-          </div>
+          {!isSupabaseConfigured ? (
+            <div className="action-row predictor-actions">
+              <button className="button secondary" onClick={resetGame} type="button">
+                Reset game
+              </button>
+            </div>
+          ) : null}
         </div>
         <div className="pitch-visual" aria-hidden="true">
           <div className="pitch-line center" />
