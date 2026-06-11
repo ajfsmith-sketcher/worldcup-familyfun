@@ -54,6 +54,32 @@ type FootballDataScorer = {
   };
 };
 
+type SportsGameOddsTeam = {
+  names?: {
+    long?: string;
+    medium?: string;
+    short?: string;
+  };
+};
+
+type SportsGameOddsOdd = {
+  bookOdds?: string;
+  fairOdds?: string;
+  sideID?: string;
+};
+
+type SportsGameOddsEvent = {
+  eventID: string;
+  odds?: Record<string, SportsGameOddsOdd>;
+  status?: {
+    startsAt?: string;
+  };
+  teams?: {
+    away?: SportsGameOddsTeam;
+    home?: SportsGameOddsTeam;
+  };
+};
+
 type RateLimitInfo = {
   limit?: string;
   remaining?: string;
@@ -95,6 +121,7 @@ const footballDataRateLimitInfo = (headers: Headers): RateLimitInfo => {
 
 type SyncContext = {
   footballDataToken: string;
+  sportsGameOddsApiKey?: string;
   supabase: SupabaseSyncClient;
 };
 
@@ -125,7 +152,135 @@ const findLocalMatch = (apiMatch: FootballDataMatch, localMatches: LocalMatch[])
   });
 };
 
-const syncScores = async ({ footballDataToken, supabase }: SyncContext) => {
+const sportsGameOddsTeamMatches = (localCode: string, localName: string, apiTeam?: SportsGameOddsTeam) => {
+  const apiNames = [apiTeam?.names?.short, apiTeam?.names?.medium, apiTeam?.names?.long].map(normalize).filter(Boolean);
+  const localNames = [localCode, localName].map(normalize);
+  return apiNames.some((apiName) => localNames.some((localNameValue) => apiName === localNameValue || apiName.includes(localNameValue)));
+};
+
+const findLocalSportsGameOddsMatch = (event: SportsGameOddsEvent, localMatches: LocalMatch[]) => {
+  const startsAt = event.status?.startsAt;
+  if (!startsAt) return undefined;
+
+  const eventTime = new Date(startsAt).getTime();
+  return localMatches.find((match) => {
+    const kickoffTime = new Date(match.kickoff_at).getTime();
+    const sameKickoffWindow = Math.abs(kickoffTime - eventTime) <= 2 * 60 * 60 * 1000;
+    return (
+      sameKickoffWindow &&
+      sportsGameOddsTeamMatches(match.home_code, match.home_name, event.teams?.home) &&
+      sportsGameOddsTeamMatches(match.away_code, match.away_name, event.teams?.away)
+    );
+  });
+};
+
+const americanOddsToDecimal = (value: string | undefined) => {
+  if (!value) return null;
+  const odds = Number(value);
+  if (!Number.isFinite(odds) || odds === 0) return null;
+  return odds > 0 ? Number((odds / 100 + 1).toFixed(4)) : Number((100 / Math.abs(odds) + 1).toFixed(4));
+};
+
+const decimalSportsGameOdds = (odd: SportsGameOddsOdd | undefined) => americanOddsToDecimal(odd?.bookOdds ?? odd?.fairOdds);
+
+const sportsGameOddsForEvent = (event: SportsGameOddsEvent) => ({
+  awayWin: decimalSportsGameOdds(event.odds?.["points-away-reg-ml3way-away"]),
+  draw: decimalSportsGameOdds(event.odds?.["points-all-reg-ml3way-draw"]),
+  homeWin: decimalSportsGameOdds(event.odds?.["points-home-reg-ml3way-home"])
+});
+
+const sportsGameOddsUrl = () => {
+  const startsAfter = new Date(Date.now() - 6 * 60 * 60 * 1000).toISOString();
+  const startsBefore = new Date(Date.now() + 14 * 24 * 60 * 60 * 1000).toISOString();
+  const params = new URLSearchParams({
+    leagueID: "INTERNATIONAL_SOCCER",
+    limit: "25",
+    oddID: "points-home-reg-ml3way-home,points-all-reg-ml3way-draw,points-away-reg-ml3way-away",
+    oddsAvailable: "true",
+    startsAfter,
+    startsBefore
+  });
+
+  return `https://api.sportsgameodds.com/v2/events?${params.toString()}`;
+};
+
+const syncSportsGameOdds = async ({
+  localMatches,
+  sportsGameOddsApiKey,
+  supabase
+}: {
+  localMatches: LocalMatch[];
+  sportsGameOddsApiKey?: string;
+  supabase: SupabaseSyncClient;
+}) => {
+  if (!sportsGameOddsApiKey) {
+    return { enabled: false, matched: 0, updated: 0, failed: [], unmatched: [] };
+  }
+
+  const response = await fetch(sportsGameOddsUrl(), {
+    headers: { "X-Api-Key": sportsGameOddsApiKey },
+    next: { revalidate: 0 }
+  });
+
+  if (!response.ok) {
+    return {
+      enabled: true,
+      error: `SportsGameOdds returned ${response.status}`,
+      failed: [],
+      matched: 0,
+      unmatched: [],
+      updated: 0
+    };
+  }
+
+  const payload = (await response.json()) as { data?: SportsGameOddsEvent[] };
+  const updates = [];
+  const unmatched = [];
+
+  for (const event of payload.data ?? []) {
+    const odds = sportsGameOddsForEvent(event);
+    if (!odds.homeWin && !odds.draw && !odds.awayWin) continue;
+
+    const localMatch = findLocalSportsGameOddsMatch(event, localMatches);
+    if (!localMatch) {
+      unmatched.push({
+        away: event.teams?.away?.names?.long,
+        eventID: event.eventID,
+        home: event.teams?.home?.names?.long,
+        startsAt: event.status?.startsAt
+      });
+      continue;
+    }
+
+    const update: Record<string, number | string> = {
+      last_synced_at: new Date().toISOString()
+    };
+
+    if (odds.awayWin) update.odds_away_win = odds.awayWin;
+    if (odds.draw) update.odds_draw = odds.draw;
+    if (odds.homeWin) update.odds_home_win = odds.homeWin;
+
+    updates.push(
+      supabase
+        .from("matches")
+        .update(update)
+        .eq("id", localMatch.id)
+    );
+  }
+
+  const results = await Promise.all(updates);
+  const failed = results.filter((result) => result.error).map((result) => result.error?.message);
+
+  return {
+    enabled: true,
+    failed,
+    matched: updates.length,
+    unmatched,
+    updated: updates.length - failed.length
+  };
+};
+
+const syncScores = async ({ footballDataToken, sportsGameOddsApiKey, supabase }: SyncContext) => {
   const [localResponse, apiResponse, scorersResponse] = await Promise.all([
     supabase.from("matches").select("id, kickoff_at, home_code, home_name, away_code, away_name, external_match_id"),
     fetch("https://api.football-data.org/v4/competitions/WC/matches?season=2026", {
@@ -192,6 +347,7 @@ const syncScores = async ({ footballDataToken, supabase }: SyncContext) => {
 
   const results = await Promise.all(updates);
   const failed = results.filter((result) => result.error).map((result) => result.error?.message);
+  const sportsGameOdds = await syncSportsGameOdds({ localMatches, sportsGameOddsApiKey, supabase });
 
   if (scorersResponse.ok) {
     const scorerPayload = (await scorersResponse.json()) as { scorers?: FootballDataScorer[] };
@@ -229,6 +385,7 @@ const syncScores = async ({ footballDataToken, supabase }: SyncContext) => {
     scorerError,
     scorerRateLimit,
     scorersUpdated,
+    sportsGameOdds,
     unmatched,
     updated: updates.length - failed.length
   });
@@ -249,6 +406,7 @@ const createSyncContext = () => {
   return {
     context: {
       footballDataToken,
+      sportsGameOddsApiKey: process.env.SPORTS_GAME_ODDS_API_KEY,
       supabase: createClient<any>(supabaseUrl, serviceRoleKey, {
         auth: { autoRefreshToken: false, persistSession: false }
       })

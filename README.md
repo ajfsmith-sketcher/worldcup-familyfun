@@ -53,10 +53,11 @@ NEXT_PUBLIC_SUPABASE_URL=
 NEXT_PUBLIC_SUPABASE_ANON_KEY=
 SUPABASE_SERVICE_ROLE_KEY=
 FOOTBALL_DATA_API_TOKEN=
+SPORTS_GAME_ODDS_API_KEY=
 CRON_SECRET=
 ```
 
-`SUPABASE_SERVICE_ROLE_KEY` and `FOOTBALL_DATA_API_TOKEN` are server-only values used by the admin score-sync route.
+`SUPABASE_SERVICE_ROLE_KEY`, `FOOTBALL_DATA_API_TOKEN`, and `SPORTS_GAME_ODDS_API_KEY` are server-only values used by the admin score-sync route.
 Do not expose them with `NEXT_PUBLIC_`.
 
 The match seed includes the official group-stage schedule and knockout bracket placeholders in UTC. Kickoff times drive prediction locking,
