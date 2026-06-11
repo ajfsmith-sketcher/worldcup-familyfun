@@ -136,6 +136,16 @@ type ScorerRow = {
   team_name: string | null;
 };
 
+type SyncRunRow = {
+  created_at: string;
+  error: string | null;
+  matched_count: number;
+  object_count: number;
+  provider: string;
+  request_count: number;
+  updated_count: number;
+};
+
 type PredictionSaveState = {
   scoreKey?: string;
   status: SaveStatus;
@@ -687,6 +697,7 @@ export function WorldCupPredictor() {
   const [players, setPlayers] = useState<Player[]>([]);
   const [matches, setMatches] = useState<MatchWithState[]>(worldCupMatches);
   const [scorers, setScorers] = useState<ScorerRow[]>([]);
+  const [syncRuns, setSyncRuns] = useState<SyncRunRow[]>([]);
   const [familyForecasts, setFamilyForecasts] = useState<Record<string, FamilyForecast>>({});
   const [activePlayerId, setActivePlayerId] = useState("");
   const [activeWorkspaceTab, setActiveWorkspaceTab] = useState<WorkspaceTab>("groups");
@@ -823,6 +834,16 @@ export function WorldCupPredictor() {
     setResults(sharedResults);
     setPlayers(withCodexPlayer(sharedPlayers, sharedMatches));
     setScorers((scorerResponse.data ?? []) as ScorerRow[]);
+    if (currentSession.user.app_metadata?.role === "admin") {
+      const { data: syncRunData } = await supabase
+        .from("sync_runs")
+        .select("created_at, error, matched_count, object_count, provider, request_count, updated_count")
+        .eq("provider", "football-data.org")
+        .order("created_at", { ascending: false });
+      setSyncRuns((syncRunData ?? []) as SyncRunRow[]);
+    } else {
+      setSyncRuns([]);
+    }
     setFamilyForecasts(forecastResponse.error ? {} : forecastFromRows(forecastResponse.data as ForecastRow[] | null));
     setPredictionSaveStatus(currentPlayerSaveStatus);
     setActivePlayerId(currentSession.user.id);
@@ -966,6 +987,16 @@ export function WorldCupPredictor() {
     if (adminResultFilter === "scored") return sortedMatches.filter((match) => hasCompletedResult(match, results));
     return sortedMatches;
   }, [adminResultFilter, matches, results]);
+  const adminScoreSyncUsage = useMemo(
+    () => ({
+      calls: syncRuns.reduce((total, run) => total + (run.request_count ?? 0), 0),
+      fixtures: syncRuns.reduce((total, run) => total + (run.object_count ?? 0), 0),
+      lastRun: syncRuns[0],
+      matched: syncRuns.reduce((total, run) => total + (run.matched_count ?? 0), 0),
+      updated: syncRuns.reduce((total, run) => total + (run.updated_count ?? 0), 0)
+    }),
+    [syncRuns]
+  );
   const standings = useMemo(
     () =>
       players
@@ -1089,6 +1120,7 @@ export function WorldCupPredictor() {
     const payload = (await response.json()) as {
       error?: string;
       matched?: number;
+      finishedWithoutScore?: number;
       rateLimit?: { remaining?: string; reset?: string; warning?: string };
       scorerError?: string;
       scorersUpdated?: number;
@@ -1108,7 +1140,12 @@ export function WorldCupPredictor() {
         ? ` API requests remaining: ${payload.rateLimit.remaining}.`
         : "";
     const scorerNote = payload.scorerError ? ` Scorers unavailable: ${payload.scorerError}.` : ` Scorers updated: ${payload.scorersUpdated ?? 0}.`;
-    setScoreSyncMessage(`Scores synced. Updated ${payload.updated ?? 0} of ${payload.matched ?? 0} matched fixtures.${scorerNote}${rateNote}`);
+    const finishedWithoutScoreNote = payload.finishedWithoutScore
+      ? ` Provider marked ${payload.finishedWithoutScore} finished fixture${payload.finishedWithoutScore === 1 ? "" : "s"} without a full-time score.`
+      : "";
+    setScoreSyncMessage(
+      `Scores synced. Updated ${payload.updated ?? 0} of ${payload.matched ?? 0} matched fixtures.${scorerNote}${finishedWithoutScoreNote}${rateNote}`
+    );
     setIsSyncingScores(false);
   };
 
@@ -1864,7 +1901,38 @@ export function WorldCupPredictor() {
                     <span>Unscored</span>
                     <strong>{unscoredMatches.length}</strong>
                   </div>
+                  <div>
+                    <span>Score API calls</span>
+                    <strong>{adminScoreSyncUsage.calls}</strong>
+                  </div>
+                  <div>
+                    <span>Provider fixtures</span>
+                    <strong>{adminScoreSyncUsage.fixtures}</strong>
+                  </div>
+                  <div>
+                    <span>Sync matched</span>
+                    <strong>{adminScoreSyncUsage.matched}</strong>
+                  </div>
+                  <div>
+                    <span>Sync updated</span>
+                    <strong>{adminScoreSyncUsage.updated}</strong>
+                  </div>
+                  <div>
+                    <span>Last score sync</span>
+                    <strong>
+                      {adminScoreSyncUsage.lastRun
+                        ? new Intl.DateTimeFormat("en-GB", { dateStyle: "medium", timeStyle: "short" }).format(
+                            new Date(adminScoreSyncUsage.lastRun.created_at)
+                          )
+                        : "-"}
+                    </strong>
+                  </div>
+                  <div>
+                    <span>Last sync status</span>
+                    <strong>{adminScoreSyncUsage.lastRun?.error ? "Warning" : adminScoreSyncUsage.lastRun ? "OK" : "-"}</strong>
+                  </div>
                 </div>
+                {adminScoreSyncUsage.lastRun?.error ? <p className="sync-message">Last score sync note: {adminScoreSyncUsage.lastRun.error}</p> : null}
 
                 <div className="match-filters compact">
                   <div className="filter-select-grid admin-filter-grid">

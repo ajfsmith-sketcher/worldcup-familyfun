@@ -125,6 +125,33 @@ const findLocalMatch = (apiMatch: FootballDataMatch, localMatches: LocalMatch[])
   });
 };
 
+const recordSyncRun = async ({
+  error,
+  matched,
+  objectCount,
+  provider,
+  requestCount,
+  supabase,
+  updated
+}: {
+  error?: string;
+  matched: number;
+  objectCount: number;
+  provider: string;
+  requestCount: number;
+  supabase: SupabaseSyncClient;
+  updated: number;
+}) => {
+  await supabase.from("sync_runs").insert({
+    error: error ?? null,
+    matched_count: matched,
+    object_count: objectCount,
+    provider,
+    request_count: requestCount,
+    updated_count: updated
+  });
+};
+
 const syncScores = async ({ footballDataToken, supabase }: SyncContext) => {
   const [localResponse, apiResponse, scorersResponse] = await Promise.all([
     supabase.from("matches").select("id, kickoff_at, home_code, home_name, away_code, away_name, external_match_id"),
@@ -156,6 +183,7 @@ const syncScores = async ({ footballDataToken, supabase }: SyncContext) => {
   const unmatched = [];
   let scorerError: string | undefined;
   let scorersUpdated = 0;
+  let finishedWithoutScore = 0;
 
   for (const apiMatch of apiPayload.matches ?? []) {
     const localMatch = findLocalMatch(apiMatch, localMatches);
@@ -171,6 +199,9 @@ const syncScores = async ({ footballDataToken, supabase }: SyncContext) => {
 
     const fullTime = apiMatch.score?.fullTime;
     const hasScore = typeof fullTime?.home === "number" && typeof fullTime?.away === "number";
+    if (apiMatch.status === "FINISHED" && !hasScore) {
+      finishedWithoutScore += 1;
+    }
 
     const update: Record<string, number | string | null> = {
       external_match_id: String(apiMatch.id),
@@ -192,6 +223,7 @@ const syncScores = async ({ footballDataToken, supabase }: SyncContext) => {
 
   const results = await Promise.all(updates);
   const failed = results.filter((result) => result.error).map((result) => result.error?.message);
+  const updated = updates.length - failed.length;
 
   if (scorersResponse.ok) {
     const scorerPayload = (await scorersResponse.json()) as { scorers?: FootballDataScorer[] };
@@ -222,15 +254,32 @@ const syncScores = async ({ footballDataToken, supabase }: SyncContext) => {
     scorerError = `football-data.org scorers returned ${scorersResponse.status}`;
   }
 
+  const syncWarnings = [
+    failed.length > 0 ? failed.join("; ") : undefined,
+    scorerError,
+    finishedWithoutScore > 0 ? `${finishedWithoutScore} finished provider fixtures had no full-time score.` : undefined
+  ].filter(Boolean);
+
+  await recordSyncRun({
+    error: syncWarnings.length > 0 ? syncWarnings.join(" ") : undefined,
+    matched: updates.length,
+    objectCount: apiPayload.matches?.length ?? 0,
+    provider: "football-data.org",
+    requestCount: 2,
+    supabase,
+    updated
+  });
+
   return NextResponse.json({
     failed,
+    finishedWithoutScore,
     matched: updates.length,
     rateLimit,
     scorerError,
     scorerRateLimit,
     scorersUpdated,
     unmatched,
-    updated: updates.length - failed.length
+    updated
   });
 };
 
