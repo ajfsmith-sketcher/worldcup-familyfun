@@ -203,7 +203,7 @@ Remaining:
 - Decide whether to upgrade Vercel or use another scheduler for more frequent score checks during the tournament.
 - Re-test once football-data.org has final/live 2026 match data available.
 - If football-data odds are sparse, test SportsGameOdds with an API key against `leagueID=INTERNATIONAL_SOCCER&oddsAvailable=true`.
-- Confirm the SportsGameOdds draw oddID for World Cup fixtures is `points-all-reg-ml3way-draw` once an API key is available.
+- SportsGameOdds odds sync now avoids a brittle `oddID` filter and parses 3-way odds by `betTypeID`, `periodID`, and `sideID`.
 
 ### 11. Add Knockout Rounds
 

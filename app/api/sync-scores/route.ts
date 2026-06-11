@@ -63,8 +63,10 @@ type SportsGameOddsTeam = {
 };
 
 type SportsGameOddsOdd = {
+  betTypeID?: string;
   bookOdds?: string;
   fairOdds?: string;
+  periodID?: string;
   sideID?: string;
 };
 
@@ -183,10 +185,13 @@ const americanOddsToDecimal = (value: string | undefined) => {
 
 const decimalSportsGameOdds = (odd: SportsGameOddsOdd | undefined) => americanOddsToDecimal(odd?.bookOdds ?? odd?.fairOdds);
 
+const sportsGameOddsBySide = (event: SportsGameOddsEvent, sideID: "away" | "draw" | "home") =>
+  Object.values(event.odds ?? {}).find((odd) => odd.betTypeID === "ml3way" && odd.periodID === "reg" && odd.sideID === sideID);
+
 const sportsGameOddsForEvent = (event: SportsGameOddsEvent) => ({
-  awayWin: decimalSportsGameOdds(event.odds?.["points-away-reg-ml3way-away"]),
-  draw: decimalSportsGameOdds(event.odds?.["points-all-reg-ml3way-draw"]),
-  homeWin: decimalSportsGameOdds(event.odds?.["points-home-reg-ml3way-home"])
+  awayWin: decimalSportsGameOdds(event.odds?.["points-away-reg-ml3way-away"] ?? sportsGameOddsBySide(event, "away")),
+  draw: decimalSportsGameOdds(event.odds?.["points-all-reg-ml3way-draw"] ?? sportsGameOddsBySide(event, "draw")),
+  homeWin: decimalSportsGameOdds(event.odds?.["points-home-reg-ml3way-home"] ?? sportsGameOddsBySide(event, "home"))
 });
 
 const sportsGameOddsUrl = () => {
@@ -195,10 +200,10 @@ const sportsGameOddsUrl = () => {
   const params = new URLSearchParams({
     leagueID: "INTERNATIONAL_SOCCER",
     limit: "25",
-    oddID: "points-home-reg-ml3way-home,points-all-reg-ml3way-draw,points-away-reg-ml3way-away",
     oddsAvailable: "true",
     startsAfter,
-    startsBefore
+    startsBefore,
+    type: "match"
   });
 
   return `https://api.sportsgameodds.com/v2/events?${params.toString()}`;
@@ -250,7 +255,8 @@ const syncSportsGameOdds = async ({
   });
 
   if (!response.ok) {
-    const error = `SportsGameOdds returned ${response.status}`;
+    const errorBody = await response.text();
+    const error = `SportsGameOdds returned ${response.status}${errorBody ? `: ${errorBody.slice(0, 400)}` : ""}`;
     await recordSyncRun({
       error,
       matched: 0,
