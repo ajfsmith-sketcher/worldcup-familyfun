@@ -54,10 +54,17 @@ NEXT_PUBLIC_SUPABASE_ANON_KEY=
 SUPABASE_SERVICE_ROLE_KEY=
 FOOTBALL_DATA_API_TOKEN=
 CRON_SECRET=
+BREVO_API_KEY=
+DIGEST_SENDER_EMAIL=
+DIGEST_SENDER_NAME=
+NEXT_PUBLIC_SITE_URL=
 ```
 
-`SUPABASE_SERVICE_ROLE_KEY` and `FOOTBALL_DATA_API_TOKEN` are server-only values used by the admin score-sync route.
+`SUPABASE_SERVICE_ROLE_KEY`, `FOOTBALL_DATA_API_TOKEN`, and `BREVO_API_KEY` are server-only values used by cron/admin routes.
 Do not expose them with `NEXT_PUBLIC_`.
+
+The daily 7am family digest uses Brevo transactional email. Set `BREVO_API_KEY` and a verified `DIGEST_SENDER_EMAIL`
+in Vercel before enabling the cron in production. `NEXT_PUBLIC_SITE_URL` should point at the public Vercel URL.
 
 The match seed includes the official group-stage schedule and knockout bracket placeholders in UTC. Kickoff times drive prediction locking,
 date filters, priority picks, and prediction visibility.

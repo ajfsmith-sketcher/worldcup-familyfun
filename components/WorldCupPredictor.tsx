@@ -85,6 +85,7 @@ type MatchRow = {
 };
 
 type PlayerRow = {
+  daily_digest_opt_in?: boolean;
   display_name: string;
   id: string;
 };
@@ -717,6 +718,7 @@ export function WorldCupPredictor() {
   const [session, setSession] = useState<Session | null>(null);
   const [email, setEmail] = useState("");
   const [profileName, setProfileName] = useState("");
+  const [dailyDigestOptIn, setDailyDigestOptIn] = useState(false);
   const [authMessage, setAuthMessage] = useState("");
   const [syncMessage, setSyncMessage] = useState("");
   const [scoreSyncMessage, setScoreSyncMessage] = useState("");
@@ -763,7 +765,7 @@ export function WorldCupPredictor() {
     setSyncMessage("Syncing shared game...");
 
     const [playerResponse, matchResponse, predictionResponse, statusResponse, scorerResponse, forecastResponse] = await Promise.all([
-      supabase.from("players").select("id, display_name").order("display_name"),
+      supabase.from("players").select("id, display_name, daily_digest_opt_in").order("display_name"),
       supabase.from("matches").select("*").order("match_number", { nullsFirst: false }),
       supabase.from("predictions").select("player_id, match_id, home_score, away_score"),
       supabase.rpc("player_prediction_status"),
@@ -811,8 +813,10 @@ export function WorldCupPredictor() {
     setProfileReady(Boolean(currentProfile));
     if (currentProfile) {
       setProfileName(currentProfile.name);
+      setDailyDigestOptIn(Boolean(playerRows.find((player) => player.id === currentProfile.id)?.daily_digest_opt_in));
     } else {
       setProfileName(currentSession.user.email?.split("@")[0] ?? "");
+      setDailyDigestOptIn(false);
     }
 
     const predictions = (predictionResponse.data ?? []) as PredictionRow[];
@@ -1039,6 +1043,7 @@ export function WorldCupPredictor() {
     if (!supabase || !session || !profileName.trim()) return;
     setSyncMessage("Saving profile...");
     const { error } = await supabase.from("players").upsert({
+      daily_digest_opt_in: dailyDigestOptIn,
       display_name: profileName.trim(),
       id: session.user.id
     });
@@ -1047,6 +1052,13 @@ export function WorldCupPredictor() {
       return;
     }
     await loadSharedState(session);
+  };
+
+  const saveDailyDigestPreference = async (nextValue: boolean) => {
+    setDailyDigestOptIn(nextValue);
+    if (!supabase || !session || !profileReady) return;
+    const { error } = await supabase.from("players").update({ daily_digest_opt_in: nextValue }).eq("id", session.user.id);
+    setSyncMessage(error ? error.message : nextValue ? "Daily email digest enabled." : "Daily email digest disabled.");
   };
 
   const savePrediction = async (matchId: string, score: ScorePick) => {
@@ -1452,6 +1464,10 @@ export function WorldCupPredictor() {
               placeholder="Display name"
               value={profileName}
             />
+            <label className="inline-check">
+              <input checked={dailyDigestOptIn} onChange={(event) => setDailyDigestOptIn(event.target.checked)} type="checkbox" />
+              <span>Send me the 7am family digest</span>
+            </label>
             <button className="button" onClick={saveProfile} type="button">
               Save
             </button>
@@ -1555,6 +1571,10 @@ export function WorldCupPredictor() {
               <div className="sync-card">
                 <strong>{session?.user.email}</strong>
                 <span>Shared Supabase game</span>
+                <label className="inline-check compact-check">
+                  <input checked={dailyDigestOptIn} onChange={(event) => saveDailyDigestPreference(event.target.checked)} type="checkbox" />
+                  <span>7am digest</span>
+                </label>
                 {isAdmin ? (
                   <button className="text-button" disabled={isSyncingScores} onClick={syncScores} type="button">
                     {isSyncingScores ? "Syncing..." : "Sync scores"}

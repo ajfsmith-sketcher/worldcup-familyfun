@@ -185,7 +185,7 @@ Remaining:
 - Confirm the production daily cron invocation after the next deployment.
 - Decide whether to upgrade Vercel or use another scheduler for more frequent score checks during the tournament.
 - Re-test once football-data.org has final/live 2026 match data available.
-- SportsGameOdds was tested as an alternative odds source, but `INTERNATIONAL_SOCCER` is unavailable on the current free tier. It may be worth revisiting for another competition or if a paid plan is ever useful.
+- Odds are parked for now. football-data requires the Odds Add-On and SportsGameOdds was tested but `INTERNATIONAL_SOCCER` is unavailable on the current free tier. It may be worth revisiting for another competition or if a paid plan is ever useful.
 
 ### 11. Add Knockout Rounds
 
@@ -341,7 +341,23 @@ Implemented:
 Remaining:
 - Supabase row mapping and API sync route tests.
 
-### 20. Dependency Audit
+### 20. Daily Email Digest
+
+Status: implemented, needs production email credentials
+
+Implementation:
+- Added `players.daily_digest_opt_in`.
+- Added a profile checkbox for the 7am family digest.
+- Added `/api/daily-digest`, protected by `CRON_SECRET`.
+- Added Vercel cron for 06:00 UTC during the tournament, which is 7am UK time in June/July.
+- Digest includes leaderboard, previous day's games, each player's picks and points, today's fixtures, and a light data-driven summary.
+
+Remaining:
+- Add `BREVO_API_KEY`, `DIGEST_SENDER_EMAIL`, `DIGEST_SENDER_NAME`, and `NEXT_PUBLIC_SITE_URL` in Vercel.
+- Send a manual test digest after Brevo credentials are configured.
+- Optional later: add an external facts/news source for richer match facts.
+
+### 21. Dependency Audit
 
 Status: proposed
 

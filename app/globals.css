@@ -162,6 +162,27 @@ h2 {
   width: 100%;
 }
 
+.inline-check {
+  align-items: center;
+  color: var(--muted);
+  display: flex;
+  font-size: 0.86rem;
+  font-weight: 800;
+  gap: 8px;
+  line-height: 1.25;
+}
+
+.inline-check input {
+  accent-color: var(--accent);
+  height: 16px;
+  min-height: 0;
+  width: 16px;
+}
+
+.compact-check {
+  margin-top: 4px;
+}
+
 .sync-message {
   color: var(--muted);
   font-size: 0.85rem;
