@@ -152,15 +152,10 @@ Status: mostly implemented
 
 Candidate: football-data.org
 
-Alternative candidate: SportsGameOdds
-
 Useful docs:
 - https://www.football-data.org/documentation
 - https://www.football-data.org/coverage
 - https://www.football-data.org/pricing
-- https://sportsgameodds.com/docs
-- https://sportsgameodds.com/pricing
-- https://sportsgameodds.com/docs/endpoints/getEvents
 
 Why it looks promising:
 - Coverage includes Worldcup on the free tier.
@@ -168,23 +163,12 @@ Why it looks promising:
 - Match endpoints support filters for `season`, `status`, `dateFrom`, `dateTo`, `stage`, and `group`.
 - Rate limits should be fine for family use if we sync server-side instead of calling from every browser.
 
-SportsGameOdds notes:
-- Purpose-built for betting odds, with events, results, live scores, game status, moneylines, and bookmaker-level odds.
-- Free "Amateur" plan lists 2.5k objects/month, 10 requests/minute, 10 minute update frequency, 8 leagues, 9 bookmakers.
-- API uses `https://api.sportsgameodds.com/v2/events` and supports `leagueID` plus `oddsAvailable=true`.
-- Auth can use an `X-Api-Key` header or `apiKey` query param; keep the key server-side.
-- Soccer support exists, including an `INTERNATIONAL_SOCCER` league ID in the docs.
-- Optional SportsGameOdds odds sync has been added to `/api/sync-scores` behind `SPORTS_GAME_ODDS_API_KEY`.
-
 Caveats:
 - Free-plan scores are delayed.
 - Live scores appear to require the paid "Free w/ Livescores" plan.
 - Odds are captured when the provider returns them, but may be null or plan-dependent.
 - The API token must stay server-side, not in frontend code.
 - Manual admin score editing should remain as a fallback.
-- Need to confirm SportsGameOdds free-plan access includes 2026 FIFA World Cup fixtures, not just generic international soccer.
-- SportsGameOdds returns odds in American format; convert/store consistently before display.
-- SportsGameOdds free plan may be enough for odds snapshots, but football-data remains the simpler source of official scores.
 
 Implementation notes:
 - Get a football-data.org API token and set `FOOTBALL_DATA_API_TOKEN` in Vercel.
@@ -196,14 +180,12 @@ Implementation notes:
 - Cron calls require `CRON_SECRET` as a bearer token.
 - `CRON_SECRET` has been added in Vercel.
 - `last_synced_at` shows when scores were last updated.
-- Add `SPORTS_GAME_ODDS_API_KEY` in Vercel to enable the optional SportsGameOdds odds pass.
 
 Remaining:
 - Confirm the production daily cron invocation after the next deployment.
 - Decide whether to upgrade Vercel or use another scheduler for more frequent score checks during the tournament.
 - Re-test once football-data.org has final/live 2026 match data available.
-- If football-data odds are sparse, test SportsGameOdds with an API key against `leagueID=INTERNATIONAL_SOCCER&oddsAvailable=true`.
-- SportsGameOdds odds sync now avoids a brittle `oddID` filter and parses 3-way odds by `betTypeID`, `periodID`, and `sideID`.
+- SportsGameOdds was tested as an alternative odds source, but `INTERNATIONAL_SOCCER` is unavailable on the current free tier. It may be worth revisiting for another competition or if a paid plan is ever useful.
 
 ### 11. Add Knockout Rounds
 
