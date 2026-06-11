@@ -204,6 +204,33 @@ const sportsGameOddsUrl = () => {
   return `https://api.sportsgameodds.com/v2/events?${params.toString()}`;
 };
 
+const recordSyncRun = async ({
+  error,
+  matched,
+  objectCount,
+  provider,
+  requestCount,
+  supabase,
+  updated
+}: {
+  error?: string;
+  matched: number;
+  objectCount: number;
+  provider: string;
+  requestCount: number;
+  supabase: SupabaseSyncClient;
+  updated: number;
+}) => {
+  await supabase.from("sync_runs").insert({
+    error: error ?? null,
+    matched_count: matched,
+    object_count: objectCount,
+    provider,
+    request_count: requestCount,
+    updated_count: updated
+  });
+};
+
 const syncSportsGameOdds = async ({
   localMatches,
   sportsGameOddsApiKey,
@@ -223,9 +250,20 @@ const syncSportsGameOdds = async ({
   });
 
   if (!response.ok) {
+    const error = `SportsGameOdds returned ${response.status}`;
+    await recordSyncRun({
+      error,
+      matched: 0,
+      objectCount: 0,
+      provider: "sportsgameodds",
+      requestCount: 1,
+      supabase,
+      updated: 0
+    });
+
     return {
       enabled: true,
-      error: `SportsGameOdds returned ${response.status}`,
+      error,
       failed: [],
       matched: 0,
       unmatched: [],
@@ -234,6 +272,7 @@ const syncSportsGameOdds = async ({
   }
 
   const payload = (await response.json()) as { data?: SportsGameOddsEvent[] };
+  const objectCount = payload.data?.length ?? 0;
   const updates = [];
   const unmatched = [];
 
@@ -270,13 +309,24 @@ const syncSportsGameOdds = async ({
 
   const results = await Promise.all(updates);
   const failed = results.filter((result) => result.error).map((result) => result.error?.message);
+  const updated = updates.length - failed.length;
+
+  await recordSyncRun({
+    error: failed.length > 0 ? failed.join("; ") : undefined,
+    matched: updates.length,
+    objectCount,
+    provider: "sportsgameodds",
+    requestCount: 1,
+    supabase,
+    updated
+  });
 
   return {
     enabled: true,
     failed,
     matched: updates.length,
     unmatched,
-    updated: updates.length - failed.length
+    updated
   };
 };
 
