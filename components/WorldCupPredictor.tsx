@@ -1300,6 +1300,95 @@ export function WorldCupPredictor() {
     );
   };
 
+  const revealedPicksForMatch = (match: MatchWithState) => {
+    const actualScore = normalizeScore(results[match.id]);
+    return players
+      .map((player) => ({
+        id: player.id,
+        name: player.name,
+        points: matchPoints(player.matchPredictions[match.id], actualScore),
+        score: normalizeScore(player.matchPredictions[match.id])
+      }))
+      .filter((pick) => hasScore(pick.score))
+      .sort((a, b) => b.points - a.points || a.name.localeCompare(b.name));
+  };
+
+  const renderRevealedPicks = (match: MatchWithState) => {
+    const actualScore = normalizeScore(results[match.id]);
+    const revealedPicks = revealedPicksForMatch(match);
+
+    return (
+      <div className="revealed-picks">
+        <strong>Family picks</strong>
+        {revealedPicks.length > 0 ? (
+          <div>
+            {revealedPicks.map((pick) => (
+              <span key={pick.id}>
+                {pick.name}: {pick.score.home}-{pick.score.away}
+                {hasScore(actualScore) ? ` (${pick.points} pts)` : ""}
+              </span>
+            ))}
+          </div>
+        ) : (
+          <span>No saved picks for this match.</span>
+        )}
+      </div>
+    );
+  };
+
+  const renderNextMatchCard = (match: MatchWithState) => {
+    const forecast = visibleFamilyForecasts[match.id];
+    const revealed = arePredictionsRevealed(match);
+
+    return (
+      <article className="next-match-card" key={match.id}>
+        <div>
+          <strong>
+            {match.homeTeam.flag} {match.homeTeam.name} vs {match.awayTeam.flag} {match.awayTeam.name}
+          </strong>
+          <span>
+            Group {match.groupId} · Match {match.matchNumber}
+          </span>
+        </div>
+        <div>
+          <b>{formatKickoff(match)}</b>
+          <span>
+            {match.venue}, {match.city}
+          </span>
+          <small className="privacy-note">{predictionStatusCopy(match).detail}</small>
+          {hasOdds(match) ? <small className="match-odds">{oddsCopy(match)}</small> : null}
+        </div>
+        <div className="family-forecast">
+          <strong>Family forecast</strong>
+          {forecast ? (
+            <>
+              <span>
+                {resultLabelForForecast(match, forecast)} from {forecast.totalPicks} picks
+              </span>
+              {forecast.topScoreHome !== null && forecast.topScoreAway !== null ? (
+                <small>
+                  Top score: {forecast.topScoreHome}-{forecast.topScoreAway}
+                  {forecast.topScorePicks ? ` (${forecast.topScorePicks} picks)` : ""}
+                </small>
+              ) : null}
+            </>
+          ) : (
+            <span>
+              {hasScore(activePlayer?.matchPredictions[match.id])
+                ? `${FAMILY_FORECAST_MINIMUM_PICKS}+ family picks needed for a forecast`
+                : "Make your pick to unlock the family lean"}
+            </span>
+          )}
+        </div>
+        {revealed ? renderRevealedPicks(match) : null}
+        <div className="fun-fact">
+          <strong>Fun fact</strong>
+          <span>{funFactForMatch(match)}</span>
+        </div>
+      </article>
+    );
+  };
+
   const renderMatchRow = (match: MatchWithState) => {
     const predictedScore = normalizeScore(activePlayer?.matchPredictions[match.id]);
     const actualScore = normalizeScore(results[match.id]);
@@ -1315,15 +1404,6 @@ export function WorldCupPredictor() {
     const rowState = locked ? "locked" : lockWarning ? "lock-warning" : priorityPick ? "priority" : needsPick ? "needs-pick" : "";
     const statusCopy = predictionStatusCopy(match);
     const showDetailedPrivacy = isTodayMatch(match) || nextMatches.some((nextMatch) => nextMatch.id === match.id);
-    const revealedPicks = players
-      .map((player) => ({
-        id: player.id,
-        name: player.name,
-        points: matchPoints(player.matchPredictions[match.id], actualScore),
-        score: normalizeScore(player.matchPredictions[match.id])
-      }))
-      .filter((pick) => hasScore(pick.score))
-      .sort((a, b) => b.points - a.points || a.name.localeCompare(b.name));
 
     return (
       <article className={`match-row ${rowState}`} key={match.id}>
@@ -1367,23 +1447,7 @@ export function WorldCupPredictor() {
           score={actualScore}
         />
         <strong className={`match-points ${points === 3 ? "exact" : points === 1 ? "outcome" : ""}`}>{points}</strong>
-        {revealed ? (
-          <div className="revealed-picks">
-            <strong>Family picks</strong>
-            {revealedPicks.length > 0 ? (
-              <div>
-                {revealedPicks.map((pick) => (
-                  <span key={pick.id}>
-                    {pick.name}: {pick.score.home}-{pick.score.away}
-                    {hasScore(actualScore) ? ` (${pick.points} pts)` : ""}
-                  </span>
-                ))}
-              </div>
-            ) : (
-              <span>No saved picks for this match.</span>
-            )}
-          </div>
-        ) : null}
+        {revealed ? renderRevealedPicks(match) : null}
       </article>
     );
   };
@@ -1528,66 +1592,6 @@ export function WorldCupPredictor() {
               </button>
             ) : null}
           </div>
-
-          {nextMatches.length > 0 && activeWorkspaceTab !== "family" ? (
-            <section className="panel next-matches-panel">
-              <div className="section-heading">
-                <div>
-                  <p className="eyebrow">Up next</p>
-                  <h2>{nextMatches.length === 1 ? "Next match" : "Next US matchday"}</h2>
-                </div>
-                <span className="badge warning">{predictionStatusCopy(nextMatches[0]).summary}</span>
-              </div>
-              <div className="next-match-list">
-                {nextMatches.map((match) => (
-                  <article className="next-match-card" key={match.id}>
-                    <div>
-                      <strong>
-                        {match.homeTeam.flag} {match.homeTeam.name} vs {match.awayTeam.flag} {match.awayTeam.name}
-                      </strong>
-                      <span>
-                        Group {match.groupId} · Match {match.matchNumber}
-                      </span>
-                    </div>
-                    <div>
-                      <b>{formatKickoff(match)}</b>
-                      <span>
-                        {match.venue}, {match.city}
-                      </span>
-                      <small className="privacy-note">{predictionStatusCopy(match).detail}</small>
-                      {hasOdds(match) ? <small className="match-odds">{oddsCopy(match)}</small> : null}
-                    </div>
-                    <div className="family-forecast">
-                      <strong>Family forecast</strong>
-                      {visibleFamilyForecasts[match.id] ? (
-                        <>
-                          <span>
-                            {resultLabelForForecast(match, visibleFamilyForecasts[match.id])} from {visibleFamilyForecasts[match.id].totalPicks} picks
-                          </span>
-                          {visibleFamilyForecasts[match.id].topScoreHome !== null && visibleFamilyForecasts[match.id].topScoreAway !== null ? (
-                            <small>
-                              Top score: {visibleFamilyForecasts[match.id].topScoreHome}-{visibleFamilyForecasts[match.id].topScoreAway}
-                              {visibleFamilyForecasts[match.id].topScorePicks ? ` (${visibleFamilyForecasts[match.id].topScorePicks} picks)` : ""}
-                            </small>
-                          ) : null}
-                        </>
-                      ) : (
-                        <span>
-                          {hasScore(activePlayer?.matchPredictions[match.id])
-                            ? `${FAMILY_FORECAST_MINIMUM_PICKS}+ family picks needed for a forecast`
-                            : "Make your pick to unlock the family lean"}
-                        </span>
-                      )}
-                    </div>
-                    <div className="fun-fact">
-                      <strong>Fun fact</strong>
-                      <span>{funFactForMatch(match)}</span>
-                    </div>
-                  </article>
-                ))}
-              </div>
-            </section>
-          ) : null}
 
           <section className={`predictor-grid ${activeWorkspaceTab === "family" ? "family-layout" : "picks-layout"}`}>
           <div className="predictor-main">
@@ -1830,18 +1834,7 @@ export function WorldCupPredictor() {
                 {nextMatches.length > 0 ? (
                   <div className="family-next-game">
                     <span>{nextMatches.length === 1 ? "Next game" : "Next US matchday"}</span>
-                    <div className="family-next-game-list">
-                      {nextMatches.map((match) => (
-                        <div key={match.id}>
-                          <strong>
-                            {match.homeTeam.flag} {match.homeTeam.name} vs {match.awayTeam.flag} {match.awayTeam.name}
-                          </strong>
-                          <small>
-                            {formatKickoff(match)} · {predictionStatusCopy(match).summary}
-                          </small>
-                        </div>
-                      ))}
-                    </div>
+                    <div className="next-match-list">{nextMatches.map(renderNextMatchCard)}</div>
                   </div>
                 ) : null}
 

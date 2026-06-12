@@ -20,6 +20,7 @@ html {
   background: var(--bg);
   color: var(--ink);
   font-family: Arial, Helvetica, sans-serif;
+  overflow-x: hidden;
 }
 
 body,
@@ -27,6 +28,10 @@ h1,
 h2,
 p {
   margin: 0;
+}
+
+body {
+  overflow-x: hidden;
 }
 
 button,
@@ -38,6 +43,7 @@ input {
   margin: 0 auto;
   max-width: 1320px;
   padding: 32px 20px 56px;
+  width: 100%;
 }
 
 .eyebrow {
@@ -386,10 +392,6 @@ h2 {
 
 .workspace-tabs button {
   min-height: 42px;
-}
-
-.next-matches-panel {
-  margin-bottom: 18px;
 }
 
 .next-match-list {
@@ -985,7 +987,7 @@ h2 {
   padding: 12px;
 }
 
-.family-next-game span {
+.family-next-game > span {
   color: var(--accent-strong);
   font-size: 0.76rem;
   font-weight: 900;
@@ -1000,23 +1002,6 @@ h2 {
 .family-next-game small {
   color: var(--muted);
   font-weight: 800;
-}
-
-.family-next-game-list {
-  display: grid;
-  gap: 8px;
-}
-
-.family-next-game-list div {
-  border-top: 1px solid #c6ded8;
-  display: grid;
-  gap: 3px;
-  padding-top: 8px;
-}
-
-.family-next-game-list div:first-child {
-  border-top: 0;
-  padding-top: 0;
 }
 
 .family-account-card {
