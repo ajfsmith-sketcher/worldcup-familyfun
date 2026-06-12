@@ -14,6 +14,7 @@ import {
   matchPoints,
   nextKickoffMatches,
   nextPendingCount,
+  outcome,
   PREDICTION_LOCK_MS,
   scoreKey,
   scorePlayer,
@@ -22,7 +23,6 @@ import {
 } from "@/lib/gameRules";
 import {
   knockoutRounds,
-  scoringRules,
   worldCupGroups,
   worldCupMatches,
   type GroupId,
@@ -701,7 +701,7 @@ export function WorldCupPredictor() {
   const [syncRuns, setSyncRuns] = useState<SyncRunRow[]>([]);
   const [familyForecasts, setFamilyForecasts] = useState<Record<string, FamilyForecast>>({});
   const [activePlayerId, setActivePlayerId] = useState("");
-  const [activeWorkspaceTab, setActiveWorkspaceTab] = useState<WorkspaceTab>("groups");
+  const [activeWorkspaceTab, setActiveWorkspaceTab] = useState<WorkspaceTab>("family");
   const [activeView, setActiveView] = useState<ViewMode>("group");
   const [activeDateFilter, setActiveDateFilter] = useState<DateFilter>("all");
   const [activeGroupFilter, setActiveGroupFilter] = useState<GroupFilter>("all");
@@ -713,7 +713,6 @@ export function WorldCupPredictor() {
   const [adminResultFilter, setAdminResultFilter] = useState<AdminResultFilter>("needs-result");
   const [results, setResults] = useState<Record<string, ScorePick>>(emptyMatchScores);
   const [predictionSaveStatus, setPredictionSaveStatus] = useState<Record<string, PredictionSaveState>>({});
-  const [newPlayerName, setNewPlayerName] = useState("");
   const [isLoaded, setIsLoaded] = useState(false);
   const [session, setSession] = useState<Session | null>(null);
   const [email, setEmail] = useState("");
@@ -1009,16 +1008,27 @@ export function WorldCupPredictor() {
           completion:
             typeof player.predictionCount === "number" ? Math.round((player.predictionCount / matches.length) * 100) : completion(player.matchPredictions, matches),
           exactScores: matches.filter((match) => matchPoints(player.matchPredictions[match.id], results[match.id]) === 3).length,
+          gamesPlayed: scoredMatches.length,
+          goalsCorrect: scoredMatches.reduce((total, match) => {
+            const prediction = player.matchPredictions[match.id];
+            const result = results[match.id];
+            return total + Number(prediction?.home === result?.home) + Number(prediction?.away === result?.away);
+          }, 0),
           groupPickCount:
             typeof player.groupPredictionCount === "number" ? player.groupPredictionCount : completedCount(player.matchPredictions, groupStageMatchList),
           hasNextPending: Boolean(player.nextPendingCount),
           knockoutPickCount:
             typeof player.knockoutPredictionCount === "number" ? player.knockoutPredictionCount : completedCount(player.matchPredictions, knockoutMatchList),
           pickCount: typeof player.predictionCount === "number" ? player.predictionCount : completedCount(player.matchPredictions, matches),
+          resultCorrect: scoredMatches.filter((match) => outcome(player.matchPredictions[match.id]) === outcome(results[match.id])).length,
           score: scorePlayer(player, results, matches)
         }))
-        .sort((a, b) => b.score - a.score || b.exactScores - a.exactScores || b.completion - a.completion || a.name.localeCompare(b.name)),
-    [groupStageMatchList, knockoutMatchList, matches, players, results]
+        .map((player) => ({
+          ...player,
+          goalsIncorrect: player.gamesPlayed * 2 - player.goalsCorrect
+        }))
+        .sort((a, b) => b.score - a.score || b.exactScores - a.exactScores || b.goalsCorrect - a.goalsCorrect || a.name.localeCompare(b.name)),
+    [groupStageMatchList, knockoutMatchList, matches, players, results, scoredMatches]
   );
 
   const signIn = async () => {
@@ -1198,15 +1208,6 @@ export function WorldCupPredictor() {
     if (isSupabaseConfigured && isAdmin) {
       saveResult(matchId, score);
     }
-  };
-
-  const addPlayer = () => {
-    const trimmedName = newPlayerName.trim();
-    if (!trimmedName) return;
-    const player = createPlayer(trimmedName);
-    setPlayers((currentPlayers) => [...currentPlayers, player]);
-    setActivePlayerId(player.id);
-    setNewPlayerName("");
   };
 
   const resetGame = () => {
@@ -1479,6 +1480,9 @@ export function WorldCupPredictor() {
       {(!isSupabaseConfigured || (session && profileReady && activePlayer)) && (
         <>
           <div className="view-tabs workspace-tabs" aria-label="Choose app section">
+            <button className={activeWorkspaceTab === "family" ? "active" : ""} onClick={() => setActiveWorkspaceTab("family")} type="button">
+              Family table
+            </button>
             <button className={activeWorkspaceTab === "groups" ? "active" : ""} onClick={() => setActiveWorkspaceTab("groups")} type="button">
               Group games
             </button>
@@ -1488,9 +1492,6 @@ export function WorldCupPredictor() {
             <button className={activeWorkspaceTab === "scorers" ? "active" : ""} onClick={() => setActiveWorkspaceTab("scorers")} type="button">
               Scorers
             </button>
-            <button className={activeWorkspaceTab === "family" ? "active" : ""} onClick={() => setActiveWorkspaceTab("family")} type="button">
-              Family table
-            </button>
             {isAdmin ? (
               <button className={activeWorkspaceTab === "admin" ? "active" : ""} onClick={() => setActiveWorkspaceTab("admin")} type="button">
                 Admin
@@ -1498,7 +1499,7 @@ export function WorldCupPredictor() {
             ) : null}
           </div>
 
-          {nextMatches.length > 0 ? (
+          {nextMatches.length > 0 && activeWorkspaceTab !== "family" ? (
             <section className="panel next-matches-panel">
               <div className="section-heading">
                 <div>
@@ -1559,90 +1560,6 @@ export function WorldCupPredictor() {
           ) : null}
 
           <section className={`predictor-grid ${activeWorkspaceTab === "family" ? "family-layout" : "picks-layout"}`}>
-            {activeWorkspaceTab === "family" ? (
-              <aside className="panel predictor-sidebar">
-            <div className="section-heading">
-              <div>
-                <p className="eyebrow">Players</p>
-                <h2>Family leaderboard</h2>
-              </div>
-            </div>
-            {isSupabaseConfigured ? (
-              <div className="sync-card">
-                <strong>{session?.user.email}</strong>
-                <span>Shared Supabase game</span>
-                <label className="inline-check compact-check">
-                  <input checked={dailyDigestOptIn} onChange={(event) => saveDailyDigestPreference(event.target.checked)} type="checkbox" />
-                  <span>7am digest</span>
-                </label>
-                {isAdmin ? (
-                  <button className="text-button" disabled={isSyncingScores} onClick={syncScores} type="button">
-                    {isSyncingScores ? "Syncing..." : "Sync scores"}
-                  </button>
-                ) : null}
-                <button className="text-button" onClick={signOut} type="button">
-                  Sign out
-                </button>
-              </div>
-            ) : null}
-            <div className="player-list">
-              {standings.map((player, index) => (
-                <button
-                  className={`player-row ${player.id === activePlayer?.id ? "active" : ""}`}
-                  data-attention={player.hasNextPending || undefined}
-                  disabled={isSupabaseConfigured && player.id !== session?.user.id}
-                  key={player.id}
-                  onClick={() => setActivePlayerId(player.id)}
-                  type="button"
-                >
-                  <span className="rank">#{index + 1}</span>
-                  <span>
-                    <strong>{player.name}</strong>
-                    <small>
-                      Group {player.groupPickCount} / {groupStageMatchList.length} · Knockout {player.knockoutPickCount} / {knockoutMatchList.length}
-                    </small>
-                    <small>
-                      Total {player.pickCount} / {matches.length} picked · {player.exactScores} exact
-                    </small>
-                    {player.hasNextPending ? (
-                      <small className="attention-copy">
-                        Missing next {player.nextPendingCount === 1 ? "match" : `${player.nextPendingCount} matches`}
-                      </small>
-                    ) : null}
-                  </span>
-                  <b>{player.score}</b>
-                </button>
-              ))}
-            </div>
-            {!isSupabaseConfigured ? (
-              <div className="add-player">
-                <input
-                  aria-label="New player name"
-                  onChange={(event) => setNewPlayerName(event.target.value)}
-                  onKeyDown={(event) => {
-                    if (event.key === "Enter") addPlayer();
-                  }}
-                  placeholder="Add player"
-                  value={newPlayerName}
-                />
-                <button className="button" onClick={addPlayer} type="button">
-                  Add
-                </button>
-              </div>
-            ) : null}
-            <div className="scoring-list">
-              {scoringRules.map((rule) => (
-                <div key={rule.label}>
-                  <span>{rule.label}</span>
-                  <strong>{rule.points}</strong>
-                </div>
-              ))}
-            </div>
-            {syncMessage ? <p className="sync-message">{syncMessage}</p> : null}
-            {scoreSyncMessage ? <p className="sync-message">{scoreSyncMessage}</p> : null}
-              </aside>
-            ) : null}
-
           <div className="predictor-main">
             {activeWorkspaceTab === "groups" ? (
               <section className="panel match-panel">
@@ -1871,28 +1788,107 @@ export function WorldCupPredictor() {
             ) : null}
 
             {activeWorkspaceTab === "family" ? (
-              <section className="panel">
-              <div className="section-heading">
-                <div>
-                  <p className="eyebrow">Bragging rights</p>
-                  <h2>Score breakdown</h2>
+              <section className="panel family-table-panel">
+                <div className="section-heading">
+                  <div>
+                    <p className="eyebrow">Family table</p>
+                    <h2>League standings</h2>
+                  </div>
+                  <span className="badge ok">{scoredMatches.length} played</span>
                 </div>
-              </div>
-              <div className="prediction-summary">
-                {standings.map((player) => (
-                  <article key={player.id}>
-                    <strong>{player.name}</strong>
-                    <span>Total: {player.score} points</span>
-                    <span>Exact scores: {player.exactScores}</span>
-                    <span>Predictions visible: {completedCount(player.matchPredictions, matches)} / {matches.length}</span>
+
+                {nextMatches.length > 0 ? (
+                  <div className="family-next-game">
+                    <span>Next game</span>
+                    <strong>
+                      {nextMatches[0].homeTeam.flag} {nextMatches[0].homeTeam.name} vs {nextMatches[0].awayTeam.flag}{" "}
+                      {nextMatches[0].awayTeam.name}
+                    </strong>
                     <small>
-                      {isSupabaseConfigured
-                        ? "Other players' predictions appear here after kickoff."
-                        : "Scores update as actual results are entered."}
+                      {formatKickoff(nextMatches[0])} · {predictionStatusCopy(nextMatches[0]).summary}
                     </small>
-                  </article>
-                ))}
-              </div>
+                  </div>
+                ) : null}
+
+                {isSupabaseConfigured ? (
+                  <div className="sync-card family-account-card">
+                    <strong>{session?.user.email}</strong>
+                    <span>Shared Supabase game</span>
+                    <label className="inline-check compact-check">
+                      <input checked={dailyDigestOptIn} onChange={(event) => saveDailyDigestPreference(event.target.checked)} type="checkbox" />
+                      <span>7am digest</span>
+                    </label>
+                    {isAdmin ? (
+                      <button className="text-button" disabled={isSyncingScores} onClick={syncScores} type="button">
+                        {isSyncingScores ? "Syncing..." : "Sync scores"}
+                      </button>
+                    ) : null}
+                    <button className="text-button" onClick={signOut} type="button">
+                      Sign out
+                    </button>
+                  </div>
+                ) : null}
+
+                <div className="family-standings-scroll">
+                  <table className="family-standings-table">
+                    <thead>
+                      <tr>
+                        <th>#</th>
+                        <th>Player</th>
+                        <th>GP</th>
+                        <th>GC</th>
+                        <th>GI</th>
+                        <th>RC</th>
+                        <th>EX</th>
+                        <th>Pts</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {standings.map((player, index) => (
+                        <tr className={player.hasNextPending ? "needs-pick" : ""} key={player.id}>
+                          <td>{index + 1}</td>
+                          <td>
+                            <strong>{player.name}</strong>
+                            {player.hasNextPending ? (
+                              <small>Missing next {player.nextPendingCount === 1 ? "match" : `${player.nextPendingCount} matches`}</small>
+                            ) : null}
+                          </td>
+                          <td>{player.gamesPlayed}</td>
+                          <td>{player.goalsCorrect}</td>
+                          <td>{player.goalsIncorrect}</td>
+                          <td>{player.resultCorrect}</td>
+                          <td>{player.exactScores}</td>
+                          <td>
+                            <b>{player.score}</b>
+                          </td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+
+                <div className="table-key">
+                  <span>GP: games played</span>
+                  <span>GC: team scores correct</span>
+                  <span>GI: team scores missed</span>
+                  <span>RC: results correct</span>
+                  <span>EX: exact scores</span>
+                </div>
+
+                <div className="prediction-summary bragging-rights">
+                  {standings.slice(0, 4).map((player) => (
+                    <article key={player.id}>
+                      <strong>{player.name}</strong>
+                      <span>{player.score} points</span>
+                      <span>{player.pickCount} / {matches.length} picks complete</span>
+                      <small>
+                        {player.exactScores} exact · {player.goalsCorrect} scores correct · {player.resultCorrect} results correct
+                      </small>
+                    </article>
+                  ))}
+                </div>
+                {syncMessage ? <p className="sync-message">{syncMessage}</p> : null}
+                {scoreSyncMessage ? <p className="sync-message">{scoreSyncMessage}</p> : null}
               </section>
             ) : null}
 

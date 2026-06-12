@@ -336,125 +336,13 @@ h2 {
 }
 
 .predictor-grid.family-layout {
-  grid-template-columns: minmax(320px, 380px) minmax(0, 1fr);
+  grid-template-columns: minmax(0, 1fr);
 }
 
-.predictor-sidebar {
-  min-width: 0;
-  position: sticky;
-  top: 18px;
-}
-
-.player-list,
-.scoring-list,
 .prediction-summary,
 .scorers-table {
   display: grid;
   gap: 10px;
-}
-
-.player-row {
-  align-items: center;
-  background: var(--surface-muted);
-  border: 1px solid var(--line);
-  border-radius: 8px;
-  color: var(--ink);
-  cursor: pointer;
-  display: grid;
-  gap: 10px;
-  grid-template-columns: auto 1fr auto;
-  min-height: 58px;
-  min-width: 0;
-  padding: 10px;
-  text-align: left;
-  width: 100%;
-}
-
-.player-row > span:not(.rank) {
-  min-width: 0;
-}
-
-.player-row strong,
-.player-row small {
-  overflow-wrap: anywhere;
-}
-
-.player-row:disabled {
-  cursor: default;
-  opacity: 0.72;
-}
-
-.player-row[data-attention="true"] {
-  background: #fff1f2;
-  border-color: #f3a2ad;
-}
-
-.player-row[data-attention="true"]:disabled {
-  opacity: 1;
-}
-
-.player-row.active {
-  background: #e8f3f1;
-  border-color: #8dc4bb;
-}
-
-.player-row.active[data-attention="true"] {
-  background: #fff1f2;
-  border-color: #e45d70;
-}
-
-.player-row small {
-  color: var(--muted);
-  display: block;
-  margin-top: 3px;
-}
-
-.player-row .attention-copy {
-  color: #9f1239;
-  font-weight: 900;
-}
-
-.player-row b {
-  font-size: 1.35rem;
-}
-
-.rank {
-  align-items: center;
-  background: var(--surface);
-  border: 1px solid var(--line);
-  border-radius: 999px;
-  display: inline-flex;
-  font-size: 0.8rem;
-  font-weight: 800;
-  height: 36px;
-  justify-content: center;
-  width: 36px;
-}
-
-.add-player {
-  display: grid;
-  gap: 8px;
-  grid-template-columns: 1fr auto;
-  margin: 14px 0;
-}
-
-.add-player input {
-  background: #fff;
-  border: 1px solid var(--line);
-  border-radius: 8px;
-  min-height: 42px;
-  padding: 0 12px;
-}
-
-.scoring-list {
-  border-top: 1px solid var(--line);
-  padding-top: 14px;
-}
-
-.scoring-list div {
-  align-items: center;
-  display: flex;
-  justify-content: space-between;
 }
 
 .view-tabs {
@@ -1075,6 +963,121 @@ h2 {
   color: var(--muted);
 }
 
+.family-table-panel {
+  overflow: hidden;
+}
+
+.family-next-game {
+  background: #e8f3f1;
+  border: 1px solid #8dc4bb;
+  border-radius: 8px;
+  display: grid;
+  gap: 4px;
+  margin-bottom: 12px;
+  padding: 12px;
+}
+
+.family-next-game span {
+  color: var(--accent-strong);
+  font-size: 0.76rem;
+  font-weight: 900;
+  text-transform: uppercase;
+}
+
+.family-next-game strong {
+  color: var(--ink);
+  overflow-wrap: anywhere;
+}
+
+.family-next-game small {
+  color: var(--muted);
+  font-weight: 800;
+}
+
+.family-account-card {
+  grid-template-columns: minmax(0, 1fr);
+}
+
+.family-standings-scroll {
+  margin-top: 12px;
+  overflow-x: auto;
+}
+
+.family-standings-table {
+  border-collapse: collapse;
+  min-width: 680px;
+  width: 100%;
+}
+
+.family-standings-table th,
+.family-standings-table td {
+  border-bottom: 1px solid var(--line);
+  padding: 10px 8px;
+  text-align: center;
+  vertical-align: middle;
+}
+
+.family-standings-table th {
+  color: var(--muted);
+  font-size: 0.72rem;
+  font-weight: 900;
+  text-transform: uppercase;
+}
+
+.family-standings-table td:first-child,
+.family-standings-table th:first-child {
+  text-align: left;
+  width: 38px;
+}
+
+.family-standings-table td:nth-child(2),
+.family-standings-table th:nth-child(2) {
+  min-width: 190px;
+  text-align: left;
+}
+
+.family-standings-table strong {
+  display: block;
+  overflow-wrap: anywhere;
+}
+
+.family-standings-table small {
+  color: #9f1239;
+  display: block;
+  font-size: 0.72rem;
+  font-weight: 900;
+  margin-top: 3px;
+}
+
+.family-standings-table tr.needs-pick {
+  background: #fff1f2;
+}
+
+.family-standings-table b {
+  font-size: 1.1rem;
+}
+
+.table-key {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-top: 10px;
+}
+
+.table-key span {
+  background: var(--surface-muted);
+  border: 1px solid var(--line);
+  border-radius: 999px;
+  color: var(--muted);
+  font-size: 0.74rem;
+  font-weight: 800;
+  padding: 5px 8px;
+}
+
+.bragging-rights {
+  margin-top: 16px;
+}
+
 .scorers-table-head,
 .scorers-table-row {
   align-items: center;
@@ -1113,9 +1116,6 @@ h2 {
     grid-template-columns: 1fr;
   }
 
-  .predictor-sidebar {
-    position: static;
-  }
 }
 
 @media (max-width: 840px) {
@@ -1154,10 +1154,6 @@ h2 {
   .group-table-head,
   .group-table-row {
     min-width: 620px;
-  }
-
-  .predictor-sidebar {
-    position: static;
   }
 
   .match-points {
