@@ -1015,7 +1015,7 @@ h2 {
 
 .family-standings-table {
   border-collapse: collapse;
-  min-width: 680px;
+  min-width: 740px;
   width: 100%;
 }
 
@@ -1042,6 +1042,11 @@ h2 {
 
 .family-standings-table td:nth-child(2),
 .family-standings-table th:nth-child(2) {
+  width: 58px;
+}
+
+.family-standings-table td:nth-child(3),
+.family-standings-table th:nth-child(3) {
   min-width: 190px;
   text-align: left;
 }
@@ -1065,6 +1070,29 @@ h2 {
 
 .family-standings-table b {
   font-size: 1.1rem;
+}
+
+.standing-move {
+  border-radius: 999px;
+  display: inline-flex;
+  font-size: 0.78rem;
+  font-weight: 900;
+  padding: 3px 7px;
+}
+
+.standing-move.up {
+  background: #ecfdf3;
+  color: #027a48;
+}
+
+.standing-move.down {
+  background: #fff1f2;
+  color: #b42318;
+}
+
+.standing-move.flat {
+  background: var(--surface-muted);
+  color: var(--muted);
 }
 
 .table-key {
@@ -1209,6 +1237,69 @@ h2 {
 
   .quick-filters label {
     width: 100%;
+  }
+
+  .family-standings-scroll {
+    overflow-x: visible;
+  }
+
+  .family-standings-table {
+    border-collapse: separate;
+    border-spacing: 0 10px;
+    min-width: 0;
+  }
+
+  .family-standings-table thead {
+    display: none;
+  }
+
+  .family-standings-table,
+  .family-standings-table tbody,
+  .family-standings-table tr,
+  .family-standings-table td {
+    display: block;
+    width: 100%;
+  }
+
+  .family-standings-table tr {
+    background: var(--surface-muted);
+    border: 1px solid var(--line);
+    border-radius: 8px;
+    padding: 10px;
+  }
+
+  .family-standings-table td,
+  .family-standings-table td:first-child,
+  .family-standings-table td:nth-child(2),
+  .family-standings-table td:nth-child(3) {
+    border-bottom: 0;
+    display: flex;
+    gap: 12px;
+    justify-content: space-between;
+    min-width: 0;
+    padding: 5px 0;
+    text-align: right;
+    width: 100%;
+  }
+
+  .family-standings-table td::before {
+    color: var(--muted);
+    content: attr(data-label);
+    font-size: 0.72rem;
+    font-weight: 900;
+    text-align: left;
+    text-transform: uppercase;
+  }
+
+  .family-standings-table td[data-label="Player"] {
+    align-items: flex-start;
+    border-bottom: 1px solid var(--line);
+    display: grid;
+    gap: 4px;
+    justify-content: stretch;
+    margin-bottom: 5px;
+    padding-bottom: 8px;
+    text-align: left;
   }
 
   .match-row,

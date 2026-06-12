@@ -1002,35 +1002,53 @@ export function WorldCupPredictor() {
     [syncRuns]
   );
   const standings = useMemo(
-    () =>
-      players
-        .map((player) => ({
-          ...player,
-          completion:
-            typeof player.predictionCount === "number" ? Math.round((player.predictionCount / matches.length) * 100) : completion(player.matchPredictions, matches),
-          exactScores: matches.filter((match) => matchPoints(player.matchPredictions[match.id], results[match.id]) === 3).length,
-          gamesPlayed: scoredMatches.length,
-          goalsCorrect: scoredMatches.reduce((total, match) => {
-            const prediction = player.matchPredictions[match.id];
-            const result = results[match.id];
-            return total + Number(prediction?.home === result?.home) + Number(prediction?.away === result?.away);
-          }, 0),
-          groupPickCount:
-            typeof player.groupPredictionCount === "number" ? player.groupPredictionCount : completedCount(player.matchPredictions, groupStageMatchList),
-          hasNextPending: Boolean(player.nextPendingCount),
-          knockoutPickCount:
-            typeof player.knockoutPredictionCount === "number" ? player.knockoutPredictionCount : completedCount(player.matchPredictions, knockoutMatchList),
-          pickCount: typeof player.predictionCount === "number" ? player.predictionCount : completedCount(player.matchPredictions, matches),
-          resultCorrect: scoredMatches.filter((match) => outcome(player.matchPredictions[match.id]) === outcome(results[match.id])).length,
-          score: scorePlayer(player, results, matches)
-        }))
-        .map((player) => ({
-          ...player,
-          goalsIncorrect: player.gamesPlayed * 2 - player.goalsCorrect
-        }))
-        .sort((a, b) => b.score - a.score || b.exactScores - a.exactScores || b.goalsCorrect - a.goalsCorrect || a.name.localeCompare(b.name)),
+    () => {
+      const buildRows = (scoredMatchSet: MatchWithState[]) =>
+        players
+          .map((player) => ({
+            ...player,
+            completion:
+              typeof player.predictionCount === "number" ? Math.round((player.predictionCount / matches.length) * 100) : completion(player.matchPredictions, matches),
+            exactScores: scoredMatchSet.filter((match) => matchPoints(player.matchPredictions[match.id], results[match.id]) === 3).length,
+            gamesPlayed: scoredMatchSet.length,
+            goalsCorrect: scoredMatchSet.reduce((total, match) => {
+              const prediction = player.matchPredictions[match.id];
+              const result = results[match.id];
+              return total + Number(prediction?.home === result?.home) + Number(prediction?.away === result?.away);
+            }, 0),
+            groupPickCount:
+              typeof player.groupPredictionCount === "number" ? player.groupPredictionCount : completedCount(player.matchPredictions, groupStageMatchList),
+            hasNextPending: Boolean(player.nextPendingCount),
+            knockoutPickCount:
+              typeof player.knockoutPredictionCount === "number" ? player.knockoutPredictionCount : completedCount(player.matchPredictions, knockoutMatchList),
+            pickCount: typeof player.predictionCount === "number" ? player.predictionCount : completedCount(player.matchPredictions, matches),
+            resultCorrect: scoredMatchSet.filter((match) => outcome(player.matchPredictions[match.id]) === outcome(results[match.id])).length,
+            score: scorePlayer(player, results, scoredMatchSet)
+          }))
+          .map((player) => ({
+            ...player,
+            goalsIncorrect: player.gamesPlayed * 2 - player.goalsCorrect
+          }))
+          .sort((a, b) => b.score - a.score || b.exactScores - a.exactScores || b.goalsCorrect - a.goalsCorrect || a.name.localeCompare(b.name));
+
+      const orderedScoredMatches = sortMatchesByKickoff(scoredMatches);
+      const currentRows = buildRows(orderedScoredMatches);
+      const previousRows = buildRows(orderedScoredMatches.slice(0, -1));
+      const previousRankByPlayerId = new Map(previousRows.map((player, index) => [player.id, index + 1]));
+
+      return currentRows.map((player, index) => ({
+        ...player,
+        movement: previousRankByPlayerId.has(player.id) ? (previousRankByPlayerId.get(player.id) ?? index + 1) - (index + 1) : 0
+      }));
+    },
     [groupStageMatchList, knockoutMatchList, matches, players, results, scoredMatches]
   );
+
+  const renderMovement = (movement: number) => {
+    if (movement > 0) return <span className="standing-move up">▲ {movement}</span>;
+    if (movement < 0) return <span className="standing-move down">▼ {Math.abs(movement)}</span>;
+    return <span className="standing-move flat">-</span>;
+  };
 
   const signIn = async () => {
     if (!supabase || !email.trim()) return;
@@ -1862,6 +1880,7 @@ export function WorldCupPredictor() {
                     <thead>
                       <tr>
                         <th>#</th>
+                        <th>Move</th>
                         <th>Player</th>
                         <th>GP</th>
                         <th>GC</th>
@@ -1874,19 +1893,20 @@ export function WorldCupPredictor() {
                     <tbody>
                       {standings.map((player, index) => (
                         <tr className={player.hasNextPending ? "needs-pick" : ""} key={player.id}>
-                          <td>{index + 1}</td>
-                          <td>
+                          <td data-label="Rank">{index + 1}</td>
+                          <td data-label="Move">{renderMovement(player.movement)}</td>
+                          <td data-label="Player">
                             <strong>{player.name}</strong>
                             {player.hasNextPending ? (
                               <small>Missing next {player.nextPendingCount === 1 ? "match" : `${player.nextPendingCount} matches`}</small>
                             ) : null}
                           </td>
-                          <td>{player.gamesPlayed}</td>
-                          <td>{player.goalsCorrect}</td>
-                          <td>{player.goalsIncorrect}</td>
-                          <td>{player.resultCorrect}</td>
-                          <td>{player.exactScores}</td>
-                          <td>
+                          <td data-label="Games played">{player.gamesPlayed}</td>
+                          <td data-label="Goals correct">{player.goalsCorrect}</td>
+                          <td data-label="Goals incorrect">{player.goalsIncorrect}</td>
+                          <td data-label="Results correct">{player.resultCorrect}</td>
+                          <td data-label="Exact scores">{player.exactScores}</td>
+                          <td data-label="Points">
                             <b>{player.score}</b>
                           </td>
                         </tr>
@@ -1901,6 +1921,7 @@ export function WorldCupPredictor() {
                   <span>GI: team scores missed</span>
                   <span>RC: results correct</span>
                   <span>EX: exact scores</span>
+                  <span>Move: change since the previous scored match</span>
                 </div>
 
                 <div className="prediction-summary bragging-rights">
