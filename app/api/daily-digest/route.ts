@@ -311,7 +311,10 @@ const cronAuthorizationError = (request: NextRequest) => {
   return null;
 };
 
-const buildAndSendDigest = async ({ baseUrl, brevoApiKey, senderEmail, senderName, supabase }: DigestContext) => {
+const buildAndSendDigest = async (
+  { baseUrl, brevoApiKey, senderEmail, senderName, supabase }: DigestContext,
+  options: { testRecipientId?: string } = {}
+) => {
   const [playersResponse, matchesResponse, predictionsResponse, usersResponse] = await Promise.all([
     supabase.from("players").select("id, display_name, daily_digest_opt_in").order("display_name"),
     supabase.from("matches").select("id, match_number, home_name, home_code, away_name, away_code, kickoff_at, home_score, away_score, score_status").order("kickoff_at"),
@@ -361,7 +364,7 @@ const buildAndSendDigest = async ({ baseUrl, brevoApiKey, senderEmail, senderNam
   });
   const subject = `World Cup family digest - ${displayDate(today)}`;
   const recipients = players
-    .filter((player) => player.daily_digest_opt_in)
+    .filter((player) => (options.testRecipientId ? player.id === options.testRecipientId : player.daily_digest_opt_in))
     .map((player) => ({ email: usersById.get(player.id)?.email, name: player.display_name }))
     .filter((recipient): recipient is { email: string; name: string } => Boolean(recipient.email));
 
@@ -379,7 +382,12 @@ const buildAndSendDigest = async ({ baseUrl, brevoApiKey, senderEmail, senderNam
     )
   );
 
-  return { recipients: recipients.length, todayMatches: todayMatches.length, yesterdayMatches: yesterdayMatches.length };
+  return {
+    mode: options.testRecipientId ? "test" : "scheduled",
+    recipients: recipients.length,
+    todayMatches: todayMatches.length,
+    yesterdayMatches: yesterdayMatches.length
+  };
 };
 
 export async function GET(request: NextRequest) {
@@ -394,5 +402,29 @@ export async function GET(request: NextRequest) {
     return NextResponse.json(result);
   } catch (error) {
     return NextResponse.json({ error: error instanceof Error ? error.message : "Could not send daily digest." }, { status: 500 });
+  }
+}
+
+export async function POST(request: NextRequest) {
+  const setup = createContext();
+  if ("status" in setup) return setup;
+
+  const authHeader = request.headers.get("authorization");
+  const accessToken = authHeader?.startsWith("Bearer ") ? authHeader.slice("Bearer ".length) : "";
+  if (!accessToken) {
+    return NextResponse.json({ error: "Missing Supabase access token." }, { status: 401 });
+  }
+
+  const { supabase } = setup.context;
+  const { data: userData, error: userError } = await supabase.auth.getUser(accessToken);
+  if (userError || userData.user?.app_metadata?.role !== "admin") {
+    return NextResponse.json({ error: "Admin access required." }, { status: 403 });
+  }
+
+  try {
+    const result = await buildAndSendDigest(setup.context, { testRecipientId: userData.user.id });
+    return NextResponse.json(result);
+  } catch (error) {
+    return NextResponse.json({ error: error instanceof Error ? error.message : "Could not send test daily digest." }, { status: 500 });
   }
 }

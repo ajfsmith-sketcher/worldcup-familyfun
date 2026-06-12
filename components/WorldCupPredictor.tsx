@@ -721,6 +721,7 @@ export function WorldCupPredictor() {
   const [authMessage, setAuthMessage] = useState("");
   const [syncMessage, setSyncMessage] = useState("");
   const [scoreSyncMessage, setScoreSyncMessage] = useState("");
+  const [isSendingDigest, setIsSendingDigest] = useState(false);
   const [isSyncingScores, setIsSyncingScores] = useState(false);
   const [profileReady, setProfileReady] = useState(!isSupabaseConfigured);
 
@@ -1169,6 +1170,35 @@ export function WorldCupPredictor() {
       `Scores synced. Updated ${payload.updated ?? 0} of ${payload.matched ?? 0} matched fixtures.${scorerNote}${finishedWithoutScoreNote}${rateNote}`
     );
     setIsSyncingScores(false);
+  };
+
+  const sendTestDigest = async () => {
+    if (!supabase || !session) return;
+    setIsSendingDigest(true);
+    setScoreSyncMessage("Sending test digest...");
+    const { data } = await supabase.auth.getSession();
+    const accessToken = data.session?.access_token;
+    if (!accessToken) {
+      setScoreSyncMessage("Sign in again before sending the test digest.");
+      setIsSendingDigest(false);
+      return;
+    }
+
+    const response = await fetch("/api/daily-digest", {
+      method: "POST",
+      headers: {
+        Authorization: `Bearer ${accessToken}`
+      }
+    });
+    const payload = (await response.json()) as { error?: string; recipients?: number };
+    if (!response.ok) {
+      setScoreSyncMessage(payload.error ?? "Could not send test digest.");
+      setIsSendingDigest(false);
+      return;
+    }
+
+    setScoreSyncMessage(`Test digest sent to ${payload.recipients ?? 0} recipient${payload.recipients === 1 ? "" : "s"}.`);
+    setIsSendingDigest(false);
   };
 
   const updateActiveMatchScore = (matchId: string, score: ScorePick) => {
@@ -1904,9 +1934,14 @@ export function WorldCupPredictor() {
                     <p className="eyebrow">Admin console</p>
                     <h2>Result entry</h2>
                   </div>
-                  <button className="button" disabled={isSyncingScores} onClick={syncScores} type="button">
-                    {isSyncingScores ? "Syncing..." : "Sync scores"}
-                  </button>
+                  <div className="admin-actions">
+                    <button className="button" disabled={isSyncingScores} onClick={syncScores} type="button">
+                      {isSyncingScores ? "Syncing..." : "Sync scores"}
+                    </button>
+                    <button className="text-button" disabled={isSendingDigest} onClick={sendTestDigest} type="button">
+                      {isSendingDigest ? "Sending..." : "Send test digest"}
+                    </button>
+                  </div>
                 </div>
 
                 <div className="admin-stat-grid">

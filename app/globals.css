@@ -570,6 +570,14 @@ h2 {
   grid-template-columns: minmax(220px, 360px);
 }
 
+.admin-actions {
+  align-items: center;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  justify-content: flex-end;
+}
+
 .admin-result-list {
   display: grid;
   gap: 10px;
