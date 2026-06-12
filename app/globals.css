@@ -1015,14 +1015,14 @@ h2 {
 
 .family-standings-table {
   border-collapse: collapse;
-  min-width: 740px;
+  min-width: 640px;
   width: 100%;
 }
 
 .family-standings-table th,
 .family-standings-table td {
   border-bottom: 1px solid var(--line);
-  padding: 10px 8px;
+  padding: 9px 6px;
   text-align: center;
   vertical-align: middle;
 }
@@ -1037,17 +1037,17 @@ h2 {
 .family-standings-table td:first-child,
 .family-standings-table th:first-child {
   text-align: left;
-  width: 38px;
+  width: 34px;
 }
 
 .family-standings-table td:nth-child(2),
 .family-standings-table th:nth-child(2) {
-  width: 58px;
+  width: 52px;
 }
 
 .family-standings-table td:nth-child(3),
 .family-standings-table th:nth-child(3) {
-  min-width: 190px;
+  min-width: 150px;
   text-align: left;
 }
 
@@ -1239,72 +1239,67 @@ h2 {
     width: 100%;
   }
 
+  .match-row,
+  .admin-result-row,
+  .next-match-card {
+    padding: 10px;
+  }
+}
+
+@media (max-width: 520px) and (orientation: portrait) {
   .family-standings-scroll {
     overflow-x: visible;
   }
 
   .family-standings-table {
-    border-collapse: separate;
-    border-spacing: 0 10px;
     min-width: 0;
+    table-layout: fixed;
   }
 
-  .family-standings-table thead {
+  .family-standings-table th:nth-child(4),
+  .family-standings-table th:nth-child(5),
+  .family-standings-table th:nth-child(6),
+  .family-standings-table th:nth-child(7),
+  .family-standings-table th:nth-child(8),
+  .family-standings-table td:nth-child(4),
+  .family-standings-table td:nth-child(5),
+  .family-standings-table td:nth-child(6),
+  .family-standings-table td:nth-child(7),
+  .family-standings-table td:nth-child(8) {
     display: none;
   }
 
-  .family-standings-table,
-  .family-standings-table tbody,
-  .family-standings-table tr,
+  .family-standings-table th,
   .family-standings-table td {
-    display: block;
-    width: 100%;
+    padding: 9px 4px;
   }
 
-  .family-standings-table tr {
-    background: var(--surface-muted);
-    border: 1px solid var(--line);
-    border-radius: 8px;
-    padding: 10px;
+  .family-standings-table th:first-child,
+  .family-standings-table td:first-child {
+    width: 30px;
   }
 
-  .family-standings-table td,
-  .family-standings-table td:first-child,
-  .family-standings-table td:nth-child(2),
+  .family-standings-table th:nth-child(2),
+  .family-standings-table td:nth-child(2) {
+    width: 48px;
+  }
+
+  .family-standings-table th:nth-child(3),
   .family-standings-table td:nth-child(3) {
-    border-bottom: 0;
-    display: flex;
-    gap: 12px;
-    justify-content: space-between;
     min-width: 0;
-    padding: 5px 0;
-    text-align: right;
-    width: 100%;
+    width: auto;
   }
 
-  .family-standings-table td::before {
-    color: var(--muted);
-    content: attr(data-label);
-    font-size: 0.72rem;
-    font-weight: 900;
-    text-align: left;
-    text-transform: uppercase;
+  .family-standings-table th:nth-child(9),
+  .family-standings-table td:nth-child(9) {
+    width: 46px;
   }
 
-  .family-standings-table td[data-label="Player"] {
-    align-items: flex-start;
-    border-bottom: 1px solid var(--line);
-    display: grid;
-    gap: 4px;
-    justify-content: stretch;
-    margin-bottom: 5px;
-    padding-bottom: 8px;
-    text-align: left;
+  .family-standings-table strong {
+    font-size: 0.9rem;
   }
 
-  .match-row,
-  .admin-result-row,
-  .next-match-card {
-    padding: 10px;
+  .family-standings-table small {
+    font-size: 0.66rem;
   }
 }
