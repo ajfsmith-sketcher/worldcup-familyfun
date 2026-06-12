@@ -994,6 +994,23 @@ h2 {
   font-weight: 800;
 }
 
+.family-next-game-list {
+  display: grid;
+  gap: 8px;
+}
+
+.family-next-game-list div {
+  border-top: 1px solid #c6ded8;
+  display: grid;
+  gap: 3px;
+  padding-top: 8px;
+}
+
+.family-next-game-list div:first-child {
+  border-top: 0;
+  padding-top: 0;
+}
+
 .family-account-card {
   grid-template-columns: minmax(0, 1fr);
 }

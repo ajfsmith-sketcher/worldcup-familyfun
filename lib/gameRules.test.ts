@@ -110,18 +110,25 @@ describe("prediction timing", () => {
 });
 
 describe("next matches", () => {
-  it("returns all matches sharing the next kickoff and counts missing picks", () => {
+  it("returns all matches on the next US matchday and counts missing picks", () => {
     vi.useFakeTimers();
     vi.setSystemTime(new Date("2026-06-11T20:00:00Z"));
 
-    expect(nextKickoffMatches(matches).map((match) => match.id)).toEqual(["A-2", "A-3"]);
+    const matchdayMatches: GameMatch[] = [
+      { id: "done", kickoffAt: "2026-06-11T19:00:00Z" },
+      { id: "late-uk-1", kickoffAt: "2026-06-12T01:00:00Z" },
+      { id: "late-uk-2", kickoffAt: "2026-06-12T03:00:00Z" },
+      { id: "next-us-day", kickoffAt: "2026-06-12T19:00:00Z" }
+    ];
+
+    expect(nextKickoffMatches(matchdayMatches).map((match) => match.id)).toEqual(["late-uk-1", "late-uk-2"]);
     expect(
       nextPendingCount(
         {
-          "A-2": score("1", "0"),
-          "A-3": score("", "")
+          "late-uk-1": score("1", "0"),
+          "late-uk-2": score("", "")
         },
-        matches
+        matchdayMatches
       )
     ).toBe(1);
   });

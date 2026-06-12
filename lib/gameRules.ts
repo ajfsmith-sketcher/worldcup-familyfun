@@ -72,6 +72,17 @@ export const arePredictionsRevealed = (match: GameMatch) =>
 
 const matchTime = (match: GameMatch) => (match.kickoffAt ? new Date(match.kickoffAt).getTime() : Number.MAX_SAFE_INTEGER);
 
+export const matchDateKeyInTimeZone = (kickoffAt: string, timeZone = "America/New_York") => {
+  const parts = new Intl.DateTimeFormat("en-CA", {
+    day: "2-digit",
+    month: "2-digit",
+    timeZone,
+    year: "numeric"
+  }).formatToParts(new Date(kickoffAt));
+  const get = (type: string) => parts.find((part) => part.type === type)?.value ?? "";
+  return `${get("year")}-${get("month")}-${get("day")}`;
+};
+
 export const sortMatchesByKickoff = <Match extends GameMatch>(currentMatches: Match[]) =>
   [...currentMatches].sort((a, b) => matchTime(a) - matchTime(b) || a.id.localeCompare(b.id));
 
@@ -80,7 +91,8 @@ export const nextKickoffMatches = <Match extends GameMatch>(currentMatches: Matc
     (match) => match.kickoffAt && new Date(match.kickoffAt).getTime() > Date.now()
   );
   const nextKickoffAt = futureMatches[0]?.kickoffAt;
-  return nextKickoffAt ? futureMatches.filter((match) => match.kickoffAt === nextKickoffAt) : [];
+  const nextMatchDateKey = nextKickoffAt ? matchDateKeyInTimeZone(nextKickoffAt) : "";
+  return nextMatchDateKey ? futureMatches.filter((match) => match.kickoffAt && matchDateKeyInTimeZone(match.kickoffAt) === nextMatchDateKey) : [];
 };
 
 export const nextPendingCount = <Match extends GameMatch>(scores: Record<string, ScorePick>, currentMatches: Match[]) =>

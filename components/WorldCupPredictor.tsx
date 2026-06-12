@@ -1504,7 +1504,7 @@ export function WorldCupPredictor() {
               <div className="section-heading">
                 <div>
                   <p className="eyebrow">Up next</p>
-                  <h2>{nextMatches.length === 1 ? "Next match" : "Next matches"}</h2>
+                  <h2>{nextMatches.length === 1 ? "Next match" : "Next US matchday"}</h2>
                 </div>
                 <span className="badge warning">{predictionStatusCopy(nextMatches[0]).summary}</span>
               </div>
@@ -1799,14 +1799,19 @@ export function WorldCupPredictor() {
 
                 {nextMatches.length > 0 ? (
                   <div className="family-next-game">
-                    <span>Next game</span>
-                    <strong>
-                      {nextMatches[0].homeTeam.flag} {nextMatches[0].homeTeam.name} vs {nextMatches[0].awayTeam.flag}{" "}
-                      {nextMatches[0].awayTeam.name}
-                    </strong>
-                    <small>
-                      {formatKickoff(nextMatches[0])} · {predictionStatusCopy(nextMatches[0]).summary}
-                    </small>
+                    <span>{nextMatches.length === 1 ? "Next game" : "Next US matchday"}</span>
+                    <div className="family-next-game-list">
+                      {nextMatches.map((match) => (
+                        <div key={match.id}>
+                          <strong>
+                            {match.homeTeam.flag} {match.homeTeam.name} vs {match.awayTeam.flag} {match.awayTeam.name}
+                          </strong>
+                          <small>
+                            {formatKickoff(match)} · {predictionStatusCopy(match).summary}
+                          </small>
+                        </div>
+                      ))}
+                    </div>
                   </div>
                 ) : null}
 
