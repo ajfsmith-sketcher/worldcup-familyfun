@@ -725,6 +725,10 @@ export function WorldCupPredictor() {
   const [isSendingDigest, setIsSendingDigest] = useState(false);
   const [isSyncingScores, setIsSyncingScores] = useState(false);
   const [isInfoOpen, setIsInfoOpen] = useState(false);
+  const [isSettingsOpen, setIsSettingsOpen] = useState(false);
+  const [isTableKeyOpen, setIsTableKeyOpen] = useState(false);
+  const [isTodayMatchesCollapsed, setIsTodayMatchesCollapsed] = useState(false);
+  const [isLeagueCollapsed, setIsLeagueCollapsed] = useState(false);
   const [profileReady, setProfileReady] = useState(!isSupabaseConfigured);
 
   const isAdmin = session?.user.app_metadata?.role === "admin";
@@ -1525,9 +1529,16 @@ export function WorldCupPredictor() {
           <p className="eyebrow">Family World Cup pool</p>
           <div className="hero-title-row">
             <h1>World Cup 2026 predictor</h1>
-            <button aria-label="Show game rules" className="hero-info-button" onClick={() => setIsInfoOpen(true)} type="button">
-              i
-            </button>
+            <div className="hero-icon-actions">
+              <button aria-label="Show game rules" className="hero-info-button" onClick={() => setIsInfoOpen(true)} type="button">
+                i
+              </button>
+              {isSupabaseConfigured && session ? (
+                <button aria-label="Open settings" className="hero-info-button" onClick={() => setIsSettingsOpen(true)} type="button">
+                  ⚙
+                </button>
+              ) : null}
+            </div>
           </div>
           {!isSupabaseConfigured ? (
             <div className="action-row predictor-actions">
@@ -1564,6 +1575,62 @@ export function WorldCupPredictor() {
               <p>Earn 1 point for the home score, 1 for the away score, and 1 for the match result.</p>
               <p>Picks turn amber two hours before kickoff and lock one hour before kickoff.</p>
               <p>Everyone&apos;s exact picks stay private until the match starts.</p>
+            </div>
+          </div>
+        </div>
+      ) : null}
+
+      {isSettingsOpen ? (
+        <div aria-modal="true" className="info-modal-backdrop" role="dialog">
+          <div className="info-modal">
+            <div className="section-heading">
+              <div>
+                <p className="eyebrow">Account</p>
+                <h2>Settings</h2>
+              </div>
+              <button aria-label="Close settings" className="hero-info-button dark" onClick={() => setIsSettingsOpen(false)} type="button">
+                ×
+              </button>
+            </div>
+            <div className="settings-list">
+              <strong>{session?.user.email}</strong>
+              <span>Shared Supabase game</span>
+              <label className="inline-check compact-check">
+                <input checked={dailyDigestOptIn} onChange={(event) => saveDailyDigestPreference(event.target.checked)} type="checkbox" />
+                <span>7am digest</span>
+              </label>
+              {isAdmin ? (
+                <button className="text-button" disabled={isSyncingScores} onClick={syncScores} type="button">
+                  {isSyncingScores ? "Syncing..." : "Sync scores"}
+                </button>
+              ) : null}
+              <button className="text-button" onClick={signOut} type="button">
+                Sign out
+              </button>
+            </div>
+          </div>
+        </div>
+      ) : null}
+
+      {isTableKeyOpen ? (
+        <div aria-modal="true" className="info-modal-backdrop" role="dialog">
+          <div className="info-modal">
+            <div className="section-heading">
+              <div>
+                <p className="eyebrow">League table</p>
+                <h2>Key</h2>
+              </div>
+              <button aria-label="Close table key" className="hero-info-button dark" onClick={() => setIsTableKeyOpen(false)} type="button">
+                ×
+              </button>
+            </div>
+            <div className="table-key in-modal">
+              <span>GP: games played</span>
+              <span>GC: team scores correct</span>
+              <span>GI: team scores missed</span>
+              <span>RC: results correct</span>
+              <span>EX: exact scores</span>
+              <span>Move: change since the previous scored match</span>
             </div>
           </div>
         </div>
@@ -1873,85 +1940,84 @@ export function WorldCupPredictor() {
                 <div className="section-heading">
                   <div>
                     <p className="eyebrow">Family table</p>
-                    <h2>League standings</h2>
+                    <h2>Dashboard</h2>
                   </div>
                   <span className="badge ok">{scoredMatches.length} played</span>
                 </div>
 
                 {familyFeaturedMatches.length > 0 ? (
-                  <div className="family-next-game">
-                    <span>Today&apos;s matches</span>
-                    <div className="next-match-list">{familyFeaturedMatches.map(renderNextMatchCard)}</div>
-                  </div>
-                ) : null}
-
-                {isSupabaseConfigured ? (
-                  <div className="sync-card family-account-card">
-                    <strong>{session?.user.email}</strong>
-                    <span>Shared Supabase game</span>
-                    <label className="inline-check compact-check">
-                      <input checked={dailyDigestOptIn} onChange={(event) => saveDailyDigestPreference(event.target.checked)} type="checkbox" />
-                      <span>7am digest</span>
-                    </label>
-                    {isAdmin ? (
-                      <button className="text-button" disabled={isSyncingScores} onClick={syncScores} type="button">
-                        {isSyncingScores ? "Syncing..." : "Sync scores"}
+                  <section className="family-section-card">
+                    <div className="family-section-heading">
+                      <div>
+                        <p className="eyebrow">Today</p>
+                        <h3>Today&apos;s matches</h3>
+                      </div>
+                      <button className="icon-text-button" onClick={() => setIsTodayMatchesCollapsed((current) => !current)} type="button">
+                        {isTodayMatchesCollapsed ? "+" : "-"}
                       </button>
-                    ) : null}
-                    <button className="text-button" onClick={signOut} type="button">
-                      Sign out
-                    </button>
-                  </div>
+                    </div>
+                    {!isTodayMatchesCollapsed ? <div className="next-match-list">{familyFeaturedMatches.map(renderNextMatchCard)}</div> : null}
+                  </section>
                 ) : null}
 
-                <div className="family-standings-scroll">
-                  <table className="family-standings-table">
-                    <thead>
-                      <tr>
-                        <th>#</th>
-                        <th>Move</th>
-                        <th>Player</th>
-                        <th>GP</th>
-                        <th>GC</th>
-                        <th>GI</th>
-                        <th>RC</th>
-                        <th>EX</th>
-                        <th>Pts</th>
-                      </tr>
-                    </thead>
-                    <tbody>
-                      {standings.map((player, index) => (
-                        <tr className={player.hasNextPending ? "needs-pick" : ""} key={player.id}>
-                          <td data-label="Rank">{index + 1}</td>
-                          <td data-label="Move">{renderMovement(player.movement)}</td>
-                          <td data-label="Player">
-                            <strong>{player.name}</strong>
-                            {player.hasNextPending ? (
-                              <small>Missing next {player.nextPendingCount === 1 ? "match" : `${player.nextPendingCount} matches`}</small>
-                            ) : null}
-                          </td>
-                          <td data-label="Games played">{player.gamesPlayed}</td>
-                          <td data-label="Goals correct">{player.goalsCorrect}</td>
-                          <td data-label="Goals incorrect">{player.goalsIncorrect}</td>
-                          <td data-label="Results correct">{player.resultCorrect}</td>
-                          <td data-label="Exact scores">{player.exactScores}</td>
-                          <td data-label="Points">
-                            <b>{player.score}</b>
-                          </td>
-                        </tr>
-                      ))}
-                    </tbody>
-                  </table>
-                </div>
+                <section className="family-section-card">
+                  <div className="family-section-heading">
+                    <div>
+                      <p className="eyebrow">League</p>
+                      <h3>League standings</h3>
+                    </div>
+                    <div className="family-section-actions">
+                      <button className="text-button" onClick={() => setIsTableKeyOpen(true)} type="button">
+                        Key
+                      </button>
+                      <button className="icon-text-button" onClick={() => setIsLeagueCollapsed((current) => !current)} type="button">
+                        {isLeagueCollapsed ? "+" : "-"}
+                      </button>
+                    </div>
+                  </div>
 
-                <div className="table-key">
-                  <span>GP: games played</span>
-                  <span>GC: team scores correct</span>
-                  <span>GI: team scores missed</span>
-                  <span>RC: results correct</span>
-                  <span>EX: exact scores</span>
-                  <span>Move: change since the previous scored match</span>
-                </div>
+                  {!isLeagueCollapsed ? (
+                    <div className="family-standings-scroll">
+                      <table className="family-standings-table">
+                        <thead>
+                          <tr>
+                            <th>#</th>
+                            <th>Move</th>
+                            <th>Player</th>
+                            <th>GP</th>
+                            <th>GC</th>
+                            <th>GI</th>
+                            <th>RC</th>
+                            <th>EX</th>
+                            <th>Pts</th>
+                          </tr>
+                        </thead>
+                        <tbody>
+                          {standings.map((player, index) => (
+                            <tr className={player.hasNextPending ? "needs-pick" : ""} key={player.id}>
+                              <td data-label="Rank">{index + 1}</td>
+                              <td data-label="Move">{renderMovement(player.movement)}</td>
+                              <td data-label="Player">
+                                <strong>{player.name}</strong>
+                                {player.hasNextPending ? (
+                                  <small>Missing next {player.nextPendingCount === 1 ? "match" : `${player.nextPendingCount} matches`}</small>
+                                ) : null}
+                              </td>
+                              <td data-label="Games played">{player.gamesPlayed}</td>
+                              <td data-label="Goals correct">{player.goalsCorrect}</td>
+                              <td data-label="Goals incorrect">{player.goalsIncorrect}</td>
+                              <td data-label="Results correct">{player.resultCorrect}</td>
+                              <td data-label="Exact scores">{player.exactScores}</td>
+                              <td data-label="Points">
+                                <b>{player.score}</b>
+                              </td>
+                            </tr>
+                          ))}
+                        </tbody>
+                      </table>
+                    </div>
+                  ) : null}
+                </section>
 
                 <div className="prediction-summary bragging-rights">
                   {standings.slice(0, 4).map((player) => (

@@ -258,6 +258,12 @@ h2 {
   margin-bottom: 0;
 }
 
+.hero-icon-actions {
+  display: flex;
+  flex: 0 0 auto;
+  gap: 8px;
+}
+
 .hero-info-button {
   align-items: center;
   background: rgba(255, 255, 255, 0.14);
@@ -311,6 +317,15 @@ h2 {
   display: grid;
   gap: 10px;
   line-height: 1.5;
+}
+
+.settings-list {
+  display: grid;
+  gap: 10px;
+}
+
+.settings-list span {
+  color: var(--muted);
 }
 
 .pitch-visual {
@@ -1037,6 +1052,47 @@ h2 {
   overflow: hidden;
 }
 
+.family-section-card {
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  display: grid;
+  gap: 12px;
+  margin-bottom: 12px;
+  padding: 12px;
+}
+
+.family-section-heading {
+  align-items: center;
+  display: flex;
+  gap: 12px;
+  justify-content: space-between;
+}
+
+.family-section-heading h3 {
+  font-size: 1.05rem;
+  margin: 0;
+}
+
+.family-section-actions {
+  align-items: center;
+  display: flex;
+  gap: 10px;
+}
+
+.icon-text-button {
+  align-items: center;
+  background: var(--surface-muted);
+  border: 1px solid var(--line);
+  border-radius: 999px;
+  color: var(--ink);
+  cursor: pointer;
+  display: inline-flex;
+  font-weight: 900;
+  height: 34px;
+  justify-content: center;
+  width: 34px;
+}
+
 .family-next-game {
   background: #e8f3f1;
   border: 1px solid #8dc4bb;
@@ -1170,6 +1226,10 @@ h2 {
   font-size: 0.74rem;
   font-weight: 800;
   padding: 5px 8px;
+}
+
+.table-key.in-modal {
+  margin-top: 0;
 }
 
 .bragging-rights {
