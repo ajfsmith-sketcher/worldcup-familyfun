@@ -11,6 +11,7 @@ import {
   hasScore,
   isPredictionLocked,
   isPredictionLockWarning,
+  matchDateKeyInTimeZone,
   matchPoints,
   nextKickoffMatches,
   nextPendingCount,
@@ -974,6 +975,10 @@ export function WorldCupPredictor() {
     [activePlayer?.matchPredictions, filteredMatches]
   );
   const nextMatches = useMemo(() => nextKickoffMatches(matches), [matches]);
+  const familyFeaturedMatches = useMemo(() => {
+    const todayUsKey = matchDateKeyInTimeZone(new Date().toISOString());
+    return sortMatchesByKickoff(matches).filter((match) => match.kickoffAt && matchDateKeyInTimeZone(match.kickoffAt) === todayUsKey);
+  }, [matches]);
   const visibleGroups = worldCupGroups.filter((group) => filteredMatches.some((match) => match.groupId === group.id));
   const resultCount = completedCount(results, matches);
   const activeGroupPickCount = activePlayer ? completedCount(activePlayer.matchPredictions, groupStageMatchList) : 0;
@@ -1421,7 +1426,7 @@ export function WorldCupPredictor() {
     const priorityPick = isPriorityPick(match, predictedScore);
     const rowState = locked ? "locked" : lockWarning ? "lock-warning" : priorityPick ? "priority" : needsPick ? "needs-pick" : "";
     const statusCopy = predictionStatusCopy(match);
-    const showDetailedPrivacy = isTodayMatch(match) || nextMatches.some((nextMatch) => nextMatch.id === match.id);
+    const showDetailedPrivacy = isTodayMatch(match) || familyFeaturedMatches.some((featuredMatch) => featuredMatch.id === match.id);
 
     return (
       <article className={`match-row ${rowState}`} key={match.id}>
@@ -1849,10 +1854,10 @@ export function WorldCupPredictor() {
                   <span className="badge ok">{scoredMatches.length} played</span>
                 </div>
 
-                {nextMatches.length > 0 ? (
+                {familyFeaturedMatches.length > 0 ? (
                   <div className="family-next-game">
-                    <span>{nextMatches.length === 1 ? "Next game" : "Next US matchday"}</span>
-                    <div className="next-match-list">{nextMatches.map(renderNextMatchCard)}</div>
+                    <span>Today&apos;s matches</span>
+                    <div className="next-match-list">{familyFeaturedMatches.map(renderNextMatchCard)}</div>
                   </div>
                 ) : null}
 
