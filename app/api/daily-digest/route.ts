@@ -36,6 +36,18 @@ type Score = {
   home: number;
 };
 
+type LeaderboardRow = {
+  exactScores: number;
+  gamesPlayed: number;
+  goalsCorrect: number;
+  goalsIncorrect: number;
+  movement: number;
+  name: string;
+  playerId: string;
+  points: number;
+  resultCorrect: number;
+};
+
 type DigestContext = {
   baseUrl: string;
   brevoApiKey: string;
@@ -51,15 +63,23 @@ const htmlEscape = (value: string | number | null | undefined) =>
     .replace(/>/g, "&gt;")
     .replace(/"/g, "&quot;");
 
-const localDateKey = (date: Date) => {
-  const parts = new Intl.DateTimeFormat("en-GB", {
-    day: "2-digit",
-    month: "2-digit",
-    timeZone: "Europe/London",
-    year: "numeric"
-  }).formatToParts(date);
-  const get = (type: string) => parts.find((part) => part.type === type)?.value ?? "";
-  return `${get("year")}-${get("month")}-${get("day")}`;
+const DIGEST_HOUR_UTC = 6;
+const ONE_DAY_MS = 24 * 60 * 60 * 1000;
+
+const latestDigestEnd = (now = new Date()) => {
+  const end = new Date(now);
+  end.setUTCHours(DIGEST_HOUR_UTC, 0, 0, 0);
+  if (end.getTime() > now.getTime()) {
+    end.setUTCDate(end.getUTCDate() - 1);
+  }
+  return end;
+};
+
+const digestWindow = (now = new Date()) => {
+  const end = latestDigestEnd(now);
+  const start = new Date(end.getTime() - ONE_DAY_MS);
+  const nextEnd = new Date(end.getTime() + ONE_DAY_MS);
+  return { end, nextEnd, start };
 };
 
 const displayDate = (date: Date) =>
@@ -102,19 +122,19 @@ const scoreLabel = (score: Score | undefined) => (score ? `${score.home}-${score
 
 const buildSummary = ({
   leaderboard,
-  yesterdayMatches
+  windowMatches
 }: {
-  leaderboard: Array<{ name: string; points: number }>;
-  yesterdayMatches: MatchRow[];
+  leaderboard: LeaderboardRow[];
+  windowMatches: MatchRow[];
 }) => {
   const leader = leaderboard[0];
-  const scoredYesterday = yesterdayMatches.filter((match) => scoreFromMatch(match)).length;
-  const finishedWithoutScores = yesterdayMatches.filter((match) => match.score_status === "FINISHED" && !scoreFromMatch(match)).length;
+  const scoredInWindow = windowMatches.filter((match) => scoreFromMatch(match)).length;
+  const finishedWithoutScores = windowMatches.filter((match) => match.score_status === "FINISHED" && !scoreFromMatch(match)).length;
   const leaderCopy = leader ? `${leader.name} is setting the pace on ${leader.points} points` : "The leaderboard is still limbering up";
   const resultCopy =
-    scoredYesterday > 0
-      ? `${scoredYesterday} result${scoredYesterday === 1 ? "" : "s"} landed yesterday.`
-      : "Yesterday's official scores are still making their way through the feed.";
+    scoredInWindow > 0
+      ? `${scoredInWindow} result${scoredInWindow === 1 ? "" : "s"} landed since the last digest.`
+      : "The latest official scores are still making their way through the feed.";
   const providerCopy =
     finishedWithoutScores > 0
       ? ` ${finishedWithoutScores} finished match${finishedWithoutScores === 1 ? " is" : "es are"} still waiting on a full-time score from the provider.`
@@ -123,39 +143,95 @@ const buildSummary = ({
   return `${leaderCopy}. ${resultCopy}${providerCopy} Plenty of time for a heroic comeback, or at least a very confident group chat message.`;
 };
 
+const buildLeaderboard = ({
+  matches,
+  players,
+  predictions,
+  previousRanks = new Map<string, number>()
+}: {
+  matches: MatchRow[];
+  players: PlayerRow[];
+  predictions: Map<string, Score>;
+  previousRanks?: Map<string, number>;
+}) => {
+  const gamesPlayed = matches.length;
+  return players
+    .map((player) => {
+      const exactScores = matches.filter((match) => matchPoints(predictions.get(`${player.id}:${match.id}`), scoreFromMatch(match)) === 3).length;
+      const goalsCorrect = matches.reduce((total, match) => {
+        const prediction = predictions.get(`${player.id}:${match.id}`);
+        const result = scoreFromMatch(match);
+        return total + Number(prediction?.home === result?.home) + Number(prediction?.away === result?.away);
+      }, 0);
+      const points = matches.reduce((total, match) => total + matchPoints(predictions.get(`${player.id}:${match.id}`), scoreFromMatch(match)), 0);
+      const resultCorrect = matches.filter((match) => outcome(predictions.get(`${player.id}:${match.id}`)) === outcome(scoreFromMatch(match))).length;
+      return {
+        exactScores,
+        gamesPlayed,
+        goalsCorrect,
+        goalsIncorrect: gamesPlayed * 2 - goalsCorrect,
+        movement: 0,
+        name: player.display_name,
+        playerId: player.id,
+        points,
+        resultCorrect
+      };
+    })
+    .sort((left, right) => right.points - left.points || right.exactScores - left.exactScores || right.goalsCorrect - left.goalsCorrect || left.name.localeCompare(right.name))
+    .map((player, index) => ({
+      ...player,
+      movement: previousRanks.has(player.playerId) ? (previousRanks.get(player.playerId) ?? index + 1) - (index + 1) : 0
+    }));
+};
+
+const rankMap = (leaderboard: LeaderboardRow[]) => new Map(leaderboard.map((player, index) => [player.playerId, index + 1]));
+
+const movementLabel = (movement: number) => {
+  if (movement > 0) return `<span class="move-up">&#9650; ${movement}</span>`;
+  if (movement < 0) return `<span class="move-down">&#9660; ${Math.abs(movement)}</span>`;
+  return `<span class="move-flat">-</span>`;
+};
+
 const buildDigestHtml = ({
   appUrl,
+  digestEnd,
+  digestStart,
   leaderboard,
   players,
   predictions,
   todayMatches,
-  yesterdayDate,
-  yesterdayMatches
+  windowMatches
 }: {
   appUrl: string;
-  leaderboard: Array<{ exactScores: number; name: string; points: number }>;
+  digestEnd: Date;
+  digestStart: Date;
+  leaderboard: LeaderboardRow[];
   players: PlayerRow[];
   predictions: Map<string, Score>;
   todayMatches: MatchRow[];
-  yesterdayDate: Date;
-  yesterdayMatches: MatchRow[];
+  windowMatches: MatchRow[];
 }) => {
-  const summary = buildSummary({ leaderboard, yesterdayMatches });
+  const summary = buildSummary({ leaderboard, windowMatches });
   const leaderboardRows = leaderboard
     .map(
       (player, index) => `
         <tr>
           <td>${index + 1}</td>
+          <td>${movementLabel(player.movement)}</td>
           <td>${htmlEscape(player.name)}</td>
-          <td>${player.points}</td>
+          <td>${player.gamesPlayed}</td>
+          <td>${player.goalsCorrect}</td>
+          <td>${player.goalsIncorrect}</td>
+          <td>${player.resultCorrect}</td>
           <td>${player.exactScores}</td>
+          <td>${player.points}</td>
         </tr>`
     )
     .join("");
 
   const resultSections =
-    yesterdayMatches.length > 0
-      ? yesterdayMatches
+    windowMatches.length > 0
+      ? windowMatches
           .map((match) => {
             const result = scoreFromMatch(match);
             const pickRows = players
@@ -171,7 +247,7 @@ const buildDigestHtml = ({
               .join("");
 
             return `
-              <section>
+              <section class="inner-card">
                 <h3>Match ${match.match_number ?? ""}: ${htmlEscape(match.home_name)} ${scoreLabel(result)} ${htmlEscape(match.away_name)}</h3>
                 ${result ? "" : `<p class="muted">Provider status: ${htmlEscape(match.score_status ?? "pending")}. Full-time score not available yet.</p>`}
                 <table>
@@ -181,7 +257,7 @@ const buildDigestHtml = ({
               </section>`;
           })
           .join("")
-      : `<p class="muted">No World Cup matches yesterday.</p>`;
+      : `<p class="muted">No World Cup matches in this digest window.</p>`;
 
   const todayRows =
     todayMatches.length > 0
@@ -202,31 +278,45 @@ const buildDigestHtml = ({
           main { background: #ffffff; border: 1px solid #dbe5df; border-radius: 10px; margin: 0 auto; max-width: 760px; padding: 24px; }
           h1, h2, h3 { margin-bottom: 8px; }
           p { line-height: 1.5; }
-          table { border-collapse: collapse; margin: 12px 0 24px; width: 100%; }
+          table { border-collapse: collapse; margin: 12px 0; width: 100%; }
           th, td { border-bottom: 1px solid #e4ece8; padding: 8px; text-align: left; }
           th { color: #52635d; font-size: 12px; text-transform: uppercase; }
           .button { background: #0f766e; border-radius: 8px; color: #ffffff; display: inline-block; font-weight: bold; padding: 10px 14px; text-decoration: none; }
+          .card { border: 1px solid #dbe5df; border-radius: 12px; margin-top: 18px; padding: 18px; }
+          .inner-card { background: #f8fbfa; border: 1px solid #e2ece7; border-radius: 10px; margin-top: 12px; padding: 14px; }
+          .key { font-size: 12px; margin-top: 10px; }
+          .move-down { color: #b42318; font-weight: bold; }
+          .move-flat { color: #65736e; font-weight: bold; }
+          .move-up { color: #027a48; font-weight: bold; }
           .muted { color: #65736e; }
         </style>
       </head>
       <body>
         <main>
           <p class="muted">Family World Cup Pool</p>
-          <h1>7am digest - ${htmlEscape(displayDate(yesterdayDate))}</h1>
+          <h1>7am digest - ${htmlEscape(displayDate(digestEnd))}</h1>
           <p>${htmlEscape(summary)}</p>
           <p><a class="button" href="${htmlEscape(appUrl)}">Open the predictor</a></p>
 
-          <h2>Leaderboard</h2>
-          <table>
-            <thead><tr><th>#</th><th>Player</th><th>Points</th><th>Exact scores</th></tr></thead>
-            <tbody>${leaderboardRows}</tbody>
-          </table>
+          <section class="card">
+            <h2>Leaderboard</h2>
+            <table>
+              <thead><tr><th>#</th><th>Move</th><th>Player</th><th>GP</th><th>GC</th><th>GI</th><th>RC</th><th>EX</th><th>Pts</th></tr></thead>
+              <tbody>${leaderboardRows}</tbody>
+            </table>
+            <p class="muted key">Key: GP = games played, GC = goals correct, GI = goals incorrect, RC = results correct, EX = exact scores, Pts = total points.</p>
+          </section>
 
-          <h2>Yesterday's games</h2>
-          ${resultSections}
+          <section class="card">
+            <h2>Results since last digest</h2>
+            <p class="muted">${htmlEscape(displayDate(digestStart))} ${displayTime(digestStart)} to ${htmlEscape(displayDate(digestEnd))} ${displayTime(digestEnd)}</p>
+            ${resultSections}
+          </section>
 
-          <h2>Today's fixtures</h2>
-          <ul>${todayRows}</ul>
+          <section class="card">
+            <h2>Fixtures before the next digest</h2>
+            <ul>${todayRows}</ul>
+          </section>
         </main>
       </body>
     </html>`;
@@ -336,31 +426,29 @@ const buildAndSendDigest = async (
   );
   const usersById = new Map((usersResponse.data.users ?? []).map((user) => [user.id, user]));
   const today = new Date();
-  const yesterday = new Date(Date.now() - 24 * 60 * 60 * 1000);
-  const todayKey = localDateKey(today);
-  const yesterdayKey = localDateKey(yesterday);
-  const yesterdayMatches = matches.filter((match) => localDateKey(new Date(match.kickoff_at)) === yesterdayKey);
-  const todayMatches = matches.filter((match) => localDateKey(new Date(match.kickoff_at)) === todayKey);
+  const { end: digestEnd, nextEnd: nextDigestEnd, start: digestStart } = digestWindow(today);
+  const windowMatches = matches.filter((match) => {
+    const kickoffTime = new Date(match.kickoff_at).getTime();
+    return kickoffTime >= digestStart.getTime() && kickoffTime < digestEnd.getTime();
+  });
+  const todayMatches = matches.filter((match) => {
+    const kickoffTime = new Date(match.kickoff_at).getTime();
+    return kickoffTime >= digestEnd.getTime() && kickoffTime < nextDigestEnd.getTime();
+  });
   const scoredMatches = matches.filter(scoreFromMatch);
-  const leaderboard = players
-    .map((player) => {
-      const points = scoredMatches.reduce(
-        (total, match) => total + matchPoints(predictions.get(`${player.id}:${match.id}`), scoreFromMatch(match)),
-        0
-      );
-      const exactScores = scoredMatches.filter((match) => matchPoints(predictions.get(`${player.id}:${match.id}`), scoreFromMatch(match)) === 3).length;
-      return { exactScores, name: player.display_name, points };
-    })
-    .sort((left, right) => right.points - left.points || right.exactScores - left.exactScores || left.name.localeCompare(right.name));
+  const previousScoredMatches = scoredMatches.filter((match) => new Date(match.kickoff_at).getTime() < digestStart.getTime());
+  const previousLeaderboard = buildLeaderboard({ matches: previousScoredMatches, players, predictions });
+  const leaderboard = buildLeaderboard({ matches: scoredMatches, players, predictions, previousRanks: rankMap(previousLeaderboard) });
 
   const htmlContent = buildDigestHtml({
     appUrl: `${baseUrl}/world-cup-2026`,
+    digestEnd,
+    digestStart,
     leaderboard,
     players,
     predictions,
     todayMatches,
-    yesterdayDate: yesterday,
-    yesterdayMatches
+    windowMatches
   });
   const subject = `World Cup family digest - ${displayDate(today)}`;
   const recipients = players
@@ -386,7 +474,7 @@ const buildAndSendDigest = async (
     mode: options.testRecipientId ? "test" : "scheduled",
     recipients: recipients.length,
     todayMatches: todayMatches.length,
-    yesterdayMatches: yesterdayMatches.length
+    yesterdayMatches: windowMatches.length
   };
 };
 
