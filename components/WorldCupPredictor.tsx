@@ -724,6 +724,7 @@ export function WorldCupPredictor() {
   const [scoreSyncMessage, setScoreSyncMessage] = useState("");
   const [isSendingDigest, setIsSendingDigest] = useState(false);
   const [isSyncingScores, setIsSyncingScores] = useState(false);
+  const [isInfoOpen, setIsInfoOpen] = useState(false);
   const [profileReady, setProfileReady] = useState(!isSupabaseConfigured);
 
   const isAdmin = session?.user.app_metadata?.role === "admin";
@@ -1522,11 +1523,12 @@ export function WorldCupPredictor() {
       <header className="predictor-hero">
         <div className="predictor-hero-copy">
           <p className="eyebrow">Family World Cup pool</p>
-          <h1>World Cup 2026 predictor</h1>
-          <p className="lede">
-            Pick the score for every World Cup game. Earn 1 point for the home score, 1 for the away score, and 1 for
-            the match result. Picks turn amber two hours before kickoff, lock one hour before kickoff, and stay private until the match starts.
-          </p>
+          <div className="hero-title-row">
+            <h1>World Cup 2026 predictor</h1>
+            <button aria-label="Show game rules" className="hero-info-button" onClick={() => setIsInfoOpen(true)} type="button">
+              i
+            </button>
+          </div>
           {!isSupabaseConfigured ? (
             <div className="action-row predictor-actions">
               <button className="button secondary" onClick={resetGame} type="button">
@@ -1544,6 +1546,28 @@ export function WorldCupPredictor() {
           <strong>{resultCount} scored</strong>
         </div>
       </header>
+
+      {isInfoOpen ? (
+        <div aria-modal="true" className="info-modal-backdrop" role="dialog">
+          <div className="info-modal">
+            <div className="section-heading">
+              <div>
+                <p className="eyebrow">How it works</p>
+                <h2>Rules</h2>
+              </div>
+              <button aria-label="Close rules" className="hero-info-button dark" onClick={() => setIsInfoOpen(false)} type="button">
+                ×
+              </button>
+            </div>
+            <div className="rules-list">
+              <p>Pick the score for every World Cup game.</p>
+              <p>Earn 1 point for the home score, 1 for the away score, and 1 for the match result.</p>
+              <p>Picks turn amber two hours before kickoff and lock one hour before kickoff.</p>
+              <p>Everyone&apos;s exact picks stay private until the match starts.</p>
+            </div>
+          </div>
+        </div>
+      ) : null}
 
       {isSupabaseConfigured && !session ? (
         <section className="panel auth-panel">
