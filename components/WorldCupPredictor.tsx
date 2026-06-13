@@ -1420,6 +1420,9 @@ export function WorldCupPredictor() {
       .update({ away_score: nextAwayScore, home_score: nextHomeScore })
       .eq("id", matchId);
     setSyncMessage(error ? error.message : hasScore(score) ? "Actual score saved." : "Actual score cleared.");
+    if (!error && session) {
+      await loadSharedState(session);
+    }
   };
 
   const syncScores = async () => {
@@ -1560,6 +1563,17 @@ export function WorldCupPredictor() {
       ...currentResults,
       [matchId]: score
     }));
+    setMatches((currentMatches) =>
+      currentMatches.map((match) =>
+        match.id === matchId
+          ? {
+              ...match,
+              awayScore: score.away === "" ? null : Number(score.away),
+              homeScore: score.home === "" ? null : Number(score.home)
+            }
+          : match
+      )
+    );
     if (isSupabaseConfigured && isAdmin) {
       saveResult(matchId, score);
     }
