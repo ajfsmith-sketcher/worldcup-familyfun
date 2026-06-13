@@ -1628,6 +1628,31 @@ h2 {
     padding: 0 8px;
   }
 
+  .match-filters {
+    gap: 10px;
+    padding: 10px;
+  }
+
+  .filter-select-grid {
+    gap: 8px;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .filter-select-grid label {
+    gap: 4px;
+    min-width: 0;
+  }
+
+  .filter-select-grid span {
+    font-size: 0.68rem;
+  }
+
+  .filter-select-grid select {
+    min-height: 38px;
+    padding-left: 8px;
+    padding-right: 24px;
+  }
+
   .workspace-tabs {
     flex-wrap: nowrap;
     gap: 6px;
@@ -1650,7 +1675,20 @@ h2 {
   }
 
   .quick-filters label {
-    width: 100%;
+    flex: 1 1 calc(50% - 4px);
+    min-height: 36px;
+    min-width: 0;
+    padding: 0 8px;
+    width: auto;
+  }
+
+  .quick-filters span {
+    font-size: 0;
+  }
+
+  .quick-filters span::after {
+    content: attr(data-short-label);
+    font-size: 0.78rem;
   }
 
   .match-row,
