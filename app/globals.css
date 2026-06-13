@@ -134,6 +134,12 @@ h2 {
   color: var(--ok);
 }
 
+.badge.warning {
+  background: #fff4df;
+  border-color: #f2d49a;
+  color: var(--warning);
+}
+
 .empty {
   color: var(--muted);
   padding: 24px 0;
@@ -744,6 +750,49 @@ h2 {
 
 .admin-stat-grid strong {
   font-size: 1.6rem;
+}
+
+.admin-missing-picks {
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  display: grid;
+  gap: 12px;
+  margin-bottom: 16px;
+  padding: 12px;
+}
+
+.admin-missing-list {
+  display: grid;
+  gap: 8px;
+}
+
+.admin-missing-list article {
+  background: var(--surface-muted);
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  display: grid;
+  gap: 4px;
+  padding: 10px;
+}
+
+.admin-missing-list article.needs-pick {
+  background: #fff1f2;
+  border-color: #f4b4bd;
+}
+
+.admin-missing-list strong,
+.admin-missing-list span {
+  overflow-wrap: anywhere;
+}
+
+.admin-missing-list small {
+  color: var(--muted);
+  font-weight: 800;
+}
+
+.admin-missing-list span {
+  color: var(--ink);
+  font-weight: 900;
 }
 
 .admin-filter-grid {

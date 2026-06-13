@@ -817,10 +817,9 @@ function WorkspaceIcon({ icon }: { icon: WorkspaceTabItem["icon"] }) {
   }
   return (
     <svg aria-hidden="true" className="workspace-tab-icon" viewBox="0 0 24 24">
-      <path d="M14.5 6.5 17 4l3 3-2.5 2.5" />
-      <path d="m4 20 8.5-8.5" />
-      <path d="m12 5 7 7" />
-      <path d="M5 5h4v4H5z" />
+      <path d="M12 3 5 6v5c0 4.5 2.9 8.5 7 10 4.1-1.5 7-5.5 7-10V6l-7-3Z" />
+      <path d="M12 11a2.5 2.5 0 1 0 0-5 2.5 2.5 0 0 0 0 5Z" />
+      <path d="M8.5 17a3.5 3.5 0 0 1 7 0" />
     </svg>
   );
 }
@@ -1174,6 +1173,18 @@ export function WorldCupPredictor() {
     const yesterdayUsKey = matchDateKeyInTimeZone(yesterday.toISOString());
     return sortMatchesByKickoff(matches).filter((match) => match.kickoffAt && matchDateKeyInTimeZone(match.kickoffAt) === yesterdayUsKey);
   }, [matches]);
+  const adminTodayMissingPickRows = useMemo(
+    () =>
+      familyFeaturedMatches.map((match) => ({
+        match,
+        missingPlayers: players
+          .filter((player) => player.id !== CODEX_PLAYER_ID && !hasScore(player.matchPredictions[match.id]))
+          .map((player) => player.name)
+          .sort((left, right) => left.localeCompare(right))
+      })),
+    [familyFeaturedMatches, players]
+  );
+  const adminTodayMissingPickCount = adminTodayMissingPickRows.reduce((total, row) => total + row.missingPlayers.length, 0);
   const visibleGroups = worldCupGroups.filter((group) => filteredMatches.some((match) => match.groupId === group.id));
   const resultCount = completedCount(results, matches);
   const activeGroupPickCount = activePlayer ? completedCount(activePlayer.matchPredictions, groupStageMatchList) : 0;
@@ -2398,6 +2409,37 @@ export function WorldCupPredictor() {
                   </div>
                 </div>
                 {adminScoreSyncUsage.lastRun?.error ? <p className="sync-message">Last score sync note: {adminScoreSyncUsage.lastRun.error}</p> : null}
+
+                <section className="admin-missing-picks">
+                  <div className="family-section-heading">
+                    <div>
+                      <p className="eyebrow">US matchday</p>
+                      <h3>Missing picks for today</h3>
+                    </div>
+                    <span className={`badge ${adminTodayMissingPickCount > 0 ? "warning" : "ok"}`}>
+                      {adminTodayMissingPickCount} missing
+                    </span>
+                  </div>
+                  {adminTodayMissingPickRows.length > 0 ? (
+                    <div className="admin-missing-list">
+                      {adminTodayMissingPickRows.map(({ match, missingPlayers }) => (
+                        <article className={missingPlayers.length > 0 ? "needs-pick" : ""} key={match.id}>
+                          <strong>
+                            {match.homeTeam.flag} {match.homeTeam.name} vs {match.awayTeam.flag} {match.awayTeam.name}
+                          </strong>
+                          <small>{formatKickoff(match)}</small>
+                          {missingPlayers.length > 0 ? (
+                            <span>{missingPlayers.join(", ")}</span>
+                          ) : (
+                            <span>Everyone has picked this one.</span>
+                          )}
+                        </article>
+                      ))}
+                    </div>
+                  ) : (
+                    <p className="empty">No matches in today&apos;s US matchday window.</p>
+                  )}
+                </section>
 
                 <div className="match-filters compact">
                   <div className="filter-select-grid admin-filter-grid">
