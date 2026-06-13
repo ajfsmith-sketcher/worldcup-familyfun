@@ -15,7 +15,7 @@ export type GamePlayer = {
 export const PREDICTION_WARNING_MS = 2 * 60 * 60 * 1000;
 export const PREDICTION_LOCK_MS = 60 * 60 * 1000;
 
-export const hasScore = (score: ScorePick | undefined) => score?.home !== "" && score?.away !== "";
+export const hasScore = (score: ScorePick | undefined) => Boolean(score && score.home !== "" && score.away !== "");
 
 export const scoreKey = (score: ScorePick | undefined) => (hasScore(score) ? `${score?.home}-${score?.away}` : "");
 

@@ -127,6 +127,16 @@ type FamilyForecast = {
   totalPicks: number;
 };
 
+type AdminMissingPickRow = {
+  awayFlag: string;
+  awayName: string;
+  homeFlag: string;
+  homeName: string;
+  id: string;
+  kickoffAt: string;
+  missingPlayers: string[];
+};
+
 type ScorerRow = {
   assists: number | null;
   goals: number;
@@ -324,6 +334,9 @@ const normalizeScore = (score: ScorePick | undefined): ScorePick => ({
 
 const formatKickoff = (match: MatchWithState) =>
   match.kickoffAt ? new Intl.DateTimeFormat("en-GB", { dateStyle: "medium", timeStyle: "short" }).format(new Date(match.kickoffAt)) : "Kickoff TBC";
+
+const formatKickoffDateTime = (kickoffAt: string) =>
+  new Intl.DateTimeFormat("en-GB", { dateStyle: "medium", timeStyle: "short" }).format(new Date(kickoffAt));
 
 const formatLockDeadline = (match: MatchWithState) =>
   match.kickoffAt
@@ -829,6 +842,8 @@ export function WorldCupPredictor() {
   const [matches, setMatches] = useState<MatchWithState[]>(worldCupMatches);
   const [scorers, setScorers] = useState<ScorerRow[]>([]);
   const [syncRuns, setSyncRuns] = useState<SyncRunRow[]>([]);
+  const [adminMissingPickRows, setAdminMissingPickRows] = useState<AdminMissingPickRow[]>([]);
+  const [adminMissingPickMessage, setAdminMissingPickMessage] = useState("");
   const [familyForecasts, setFamilyForecasts] = useState<Record<string, FamilyForecast>>({});
   const [activePlayerId, setActivePlayerId] = useState("");
   const [activeWorkspaceTab, setActiveWorkspaceTab] = useState<WorkspaceTab>("family");
@@ -1033,6 +1048,8 @@ export function WorldCupPredictor() {
       } else {
         setPlayers([]);
         setScorers([]);
+        setAdminMissingPickRows([]);
+        setAdminMissingPickMessage("");
         setFamilyForecasts({});
         setActivePlayerId("");
         setProfileReady(false);
@@ -1095,6 +1112,11 @@ export function WorldCupPredictor() {
       })
     );
   }, [activeDateFilter, activeGroupFilter, activePlayerId, activeTeamFilter, activeView, filtersCollapsed, isLoaded, players, results, showMissingOnly, showUpcomingOnly]);
+
+  useEffect(() => {
+    if (!isLoaded || !isAdmin || activeWorkspaceTab !== "admin") return;
+    loadAdminMissingPicks();
+  }, [activeWorkspaceTab, isAdmin, isLoaded, session?.access_token]);
 
   const activePlayer = players.find((player) => player.id === activePlayerId) ?? players[0];
   const visibleFamilyForecasts = useMemo(
@@ -1173,18 +1195,7 @@ export function WorldCupPredictor() {
     const yesterdayUsKey = matchDateKeyInTimeZone(yesterday.toISOString());
     return sortMatchesByKickoff(matches).filter((match) => match.kickoffAt && matchDateKeyInTimeZone(match.kickoffAt) === yesterdayUsKey);
   }, [matches]);
-  const adminTodayMissingPickRows = useMemo(
-    () =>
-      familyFeaturedMatches.map((match) => ({
-        match,
-        missingPlayers: players
-          .filter((player) => player.id !== CODEX_PLAYER_ID && !hasScore(player.matchPredictions[match.id]))
-          .map((player) => player.name)
-          .sort((left, right) => left.localeCompare(right))
-      })),
-    [familyFeaturedMatches, players]
-  );
-  const adminTodayMissingPickCount = adminTodayMissingPickRows.reduce((total, row) => total + row.missingPlayers.length, 0);
+  const adminTodayMissingPickCount = adminMissingPickRows.reduce((total, row) => total + row.missingPlayers.length, 0);
   const visibleGroups = worldCupGroups.filter((group) => filteredMatches.some((match) => match.groupId === group.id));
   const resultCount = completedCount(results, matches);
   const activeGroupPickCount = activePlayer ? completedCount(activePlayer.matchPredictions, groupStageMatchList) : 0;
@@ -1428,6 +1439,31 @@ export function WorldCupPredictor() {
 
     setScoreSyncMessage(`Test digest sent to ${payload.recipients ?? 0} recipient${payload.recipients === 1 ? "" : "s"}.`);
     setIsSendingDigest(false);
+  };
+
+  const loadAdminMissingPicks = async () => {
+    if (!supabase || !session || !isAdmin) return;
+    setAdminMissingPickMessage("Checking today's missing picks...");
+    const { data } = await supabase.auth.getSession();
+    const accessToken = data.session?.access_token;
+    if (!accessToken) {
+      setAdminMissingPickMessage("Sign in again to check missing picks.");
+      return;
+    }
+
+    const response = await fetch("/api/admin-missing-picks", {
+      headers: {
+        Authorization: `Bearer ${accessToken}`
+      }
+    });
+    const payload = (await response.json()) as { error?: string; rows?: AdminMissingPickRow[] };
+    if (!response.ok) {
+      setAdminMissingPickMessage(payload.error ?? "Could not check missing picks.");
+      return;
+    }
+
+    setAdminMissingPickRows(payload.rows ?? []);
+    setAdminMissingPickMessage("");
   };
 
   const updateActiveMatchScore = (matchId: string, score: ScorePick) => {
@@ -2261,9 +2297,6 @@ export function WorldCupPredictor() {
                       <h3>League standings</h3>
                     </div>
                     <div className="family-section-actions">
-                      <button className="text-button" onClick={() => setIsTableKeyOpen(true)} type="button">
-                        Key
-                      </button>
                       <button className="icon-text-button" onClick={() => setIsLeagueCollapsed((current) => !current)} type="button">
                         {isLeagueCollapsed ? "+" : "-"}
                       </button>
@@ -2293,9 +2326,12 @@ export function WorldCupPredictor() {
                                 <td data-label="Rank">{index + 1}</td>
                                 <td data-label="Move">{renderMovement(player.movement)}</td>
                                 <td data-label="Player">
-                                  <button className="player-history-button" onClick={() => setSelectedHistoryPlayerId(player.id)} type="button">
-                                    {player.name}
-                                  </button>
+                                  <span className="player-name-cell">
+                                    <strong>{player.name}</strong>
+                                    <button aria-label={`Show completed picks for ${player.name}`} className="player-history-button" onClick={() => setSelectedHistoryPlayerId(player.id)} title="Show completed picks" type="button">
+                                      i
+                                    </button>
+                                  </span>
                                   {player.hasNextPending ? (
                                     <small>Missing next {player.nextPendingCount === 1 ? "match" : `${player.nextPendingCount} matches`}</small>
                                   ) : null}
@@ -2313,6 +2349,9 @@ export function WorldCupPredictor() {
                           </tbody>
                         </table>
                       </div>
+                      <button className="text-button league-key-button" onClick={() => setIsTableKeyOpen(true)} type="button">
+                        Key
+                      </button>
                     </>
                   ) : null}
                 </section>
@@ -2420,25 +2459,26 @@ export function WorldCupPredictor() {
                       {adminTodayMissingPickCount} missing
                     </span>
                   </div>
-                  {adminTodayMissingPickRows.length > 0 ? (
+                  {adminMissingPickMessage ? <p className="sync-message">{adminMissingPickMessage}</p> : null}
+                  {adminMissingPickRows.length > 0 ? (
                     <div className="admin-missing-list">
-                      {adminTodayMissingPickRows.map(({ match, missingPlayers }) => (
-                        <article className={missingPlayers.length > 0 ? "needs-pick" : ""} key={match.id}>
+                      {adminMissingPickRows.map((row) => (
+                        <article className={row.missingPlayers.length > 0 ? "needs-pick" : ""} key={row.id}>
                           <strong>
-                            {match.homeTeam.flag} {match.homeTeam.name} vs {match.awayTeam.flag} {match.awayTeam.name}
+                            {row.homeFlag} {row.homeName} vs {row.awayFlag} {row.awayName}
                           </strong>
-                          <small>{formatKickoff(match)}</small>
-                          {missingPlayers.length > 0 ? (
-                            <span>{missingPlayers.join(", ")}</span>
+                          <small>{formatKickoffDateTime(row.kickoffAt)}</small>
+                          {row.missingPlayers.length > 0 ? (
+                            <span>{row.missingPlayers.join(", ")}</span>
                           ) : (
                             <span>Everyone has picked this one.</span>
                           )}
                         </article>
                       ))}
                     </div>
-                  ) : (
+                  ) : !adminMissingPickMessage ? (
                     <p className="empty">No matches in today&apos;s US matchday window.</p>
-                  )}
+                  ) : null}
                 </section>
 
                 <div className="match-filters compact">
