@@ -473,7 +473,22 @@ h2 {
 }
 
 .workspace-tabs button {
+  align-items: center;
+  display: inline-flex;
+  gap: 8px;
+  justify-content: center;
   min-height: 42px;
+}
+
+.workspace-tab-icon {
+  display: none;
+  fill: none;
+  height: 22px;
+  stroke: currentColor;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+  stroke-width: 1.9;
+  width: 22px;
 }
 
 .next-match-list {
@@ -1532,6 +1547,27 @@ h2 {
 
   .view-tabs button {
     flex-basis: 100%;
+  }
+
+  .workspace-tabs {
+    flex-wrap: nowrap;
+    gap: 6px;
+    padding: 6px;
+  }
+
+  .workspace-tabs button {
+    flex: 1 1 0;
+    min-height: 46px;
+    min-width: 0;
+    padding: 0;
+  }
+
+  .workspace-tabs button span {
+    display: none;
+  }
+
+  .workspace-tab-icon {
+    display: block;
   }
 
   .quick-filters label {

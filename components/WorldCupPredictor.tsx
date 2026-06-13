@@ -146,6 +146,12 @@ type MatchScorerRow = {
   team_code: string | null;
 };
 
+type WorkspaceTabItem = {
+  icon: "admin" | "family" | "groups" | "knockouts" | "scorers";
+  label: string;
+  tab: WorkspaceTab;
+};
+
 type SyncRunRow = {
   created_at: string;
   error: string | null;
@@ -189,6 +195,13 @@ const NEXT_UPCOMING_MATCH_COUNT = 4;
 const FAMILY_FORECAST_MINIMUM_PICKS = 4;
 const CODEX_PLAYER_ID = "codex-var-dex";
 const CODEX_PLAYER_NAME = "VAR-dex";
+const workspaceTabs: WorkspaceTabItem[] = [
+  { icon: "family", label: "Family table", tab: "family" },
+  { icon: "groups", label: "Group games", tab: "groups" },
+  { icon: "knockouts", label: "Knockouts", tab: "knockouts" },
+  { icon: "scorers", label: "Scorers", tab: "scorers" },
+  { icon: "admin", label: "Admin", tab: "admin" }
+];
 
 const emptyScore = (): ScorePick => ({ away: "", home: "" });
 
@@ -752,6 +765,60 @@ function ActualScoreDisplay({
         </div>
       ) : null}
     </div>
+  );
+}
+
+function WorkspaceIcon({ icon }: { icon: WorkspaceTabItem["icon"] }) {
+  if (icon === "family") {
+    return (
+      <svg aria-hidden="true" className="workspace-tab-icon" viewBox="0 0 24 24">
+        <path d="M8 11a3 3 0 1 0 0-6 3 3 0 0 0 0 6Z" />
+        <path d="M16 11a3 3 0 1 0 0-6 3 3 0 0 0 0 6Z" />
+        <path d="M3.5 20a4.5 4.5 0 0 1 9 0" />
+        <path d="M11.5 20a4.5 4.5 0 0 1 9 0" />
+      </svg>
+    );
+  }
+  if (icon === "groups") {
+    return (
+      <svg aria-hidden="true" className="workspace-tab-icon" viewBox="0 0 24 24">
+        <path d="M4 5h16v14H4z" />
+        <path d="M4 10h16" />
+        <path d="M4 15h16" />
+        <path d="M10 5v14" />
+        <path d="M16 5v14" />
+      </svg>
+    );
+  }
+  if (icon === "knockouts") {
+    return (
+      <svg aria-hidden="true" className="workspace-tab-icon" viewBox="0 0 24 24">
+        <path d="M5 5h5v4H5z" />
+        <path d="M5 15h5v4H5z" />
+        <path d="M14 10h5v4h-5z" />
+        <path d="M10 7h2a2 2 0 0 1 2 2v3" />
+        <path d="M10 17h2a2 2 0 0 0 2-2v-3" />
+      </svg>
+    );
+  }
+  if (icon === "scorers") {
+    return (
+      <svg aria-hidden="true" className="workspace-tab-icon" viewBox="0 0 24 24">
+        <path d="M15 6c2.5 0 4 1.5 4 4" />
+        <path d="M5 18c2.8-1.2 5.2-1.4 7.5-.5" />
+        <path d="M13 11l-3.5 3.5" />
+        <path d="M8 13l3 3" />
+        <circle cx="17" cy="17" r="3" />
+      </svg>
+    );
+  }
+  return (
+    <svg aria-hidden="true" className="workspace-tab-icon" viewBox="0 0 24 24">
+      <path d="M14.5 6.5 17 4l3 3-2.5 2.5" />
+      <path d="m4 20 8.5-8.5" />
+      <path d="m12 5 7 7" />
+      <path d="M5 5h4v4H5z" />
+    </svg>
   );
 }
 
@@ -1879,23 +1946,21 @@ export function WorldCupPredictor() {
       {(!isSupabaseConfigured || (session && profileReady && activePlayer)) && (
         <>
           <div className="view-tabs workspace-tabs" aria-label="Choose app section">
-            <button className={activeWorkspaceTab === "family" ? "active" : ""} onClick={() => setActiveWorkspaceTab("family")} type="button">
-              Family table
-            </button>
-            <button className={activeWorkspaceTab === "groups" ? "active" : ""} onClick={() => setActiveWorkspaceTab("groups")} type="button">
-              Group games
-            </button>
-            <button className={activeWorkspaceTab === "knockouts" ? "active" : ""} onClick={() => setActiveWorkspaceTab("knockouts")} type="button">
-              Knockouts
-            </button>
-            <button className={activeWorkspaceTab === "scorers" ? "active" : ""} onClick={() => setActiveWorkspaceTab("scorers")} type="button">
-              Scorers
-            </button>
-            {isAdmin ? (
-              <button className={activeWorkspaceTab === "admin" ? "active" : ""} onClick={() => setActiveWorkspaceTab("admin")} type="button">
-                Admin
-              </button>
-            ) : null}
+            {workspaceTabs
+              .filter((item) => item.tab !== "admin" || isAdmin)
+              .map((item) => (
+                <button
+                  aria-label={item.label}
+                  className={activeWorkspaceTab === item.tab ? "active" : ""}
+                  key={item.tab}
+                  onClick={() => setActiveWorkspaceTab(item.tab)}
+                  title={item.label}
+                  type="button"
+                >
+                  <WorkspaceIcon icon={item.icon} />
+                  <span>{item.label}</span>
+                </button>
+              ))}
           </div>
 
           <section className={`predictor-grid ${activeWorkspaceTab === "family" ? "family-layout" : "picks-layout"}`}>
