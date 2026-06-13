@@ -349,8 +349,8 @@ const formatLockDeadline = (match: MatchWithState) =>
     ? new Intl.DateTimeFormat("en-GB", { dateStyle: "medium", timeStyle: "short" }).format(new Date(new Date(match.kickoffAt).getTime() - PREDICTION_LOCK_MS))
     : "Lock TBC";
 
-const formatTimeUntil = (targetTime: number) => {
-  const remainingMs = targetTime - Date.now();
+const formatTimeUntil = (targetTime: number, now = Date.now()) => {
+  const remainingMs = targetTime - now;
   if (remainingMs <= 0) return "now";
   const totalMinutes = Math.ceil(remainingMs / 60000);
   const days = Math.floor(totalMinutes / 1440);
@@ -362,7 +362,7 @@ const formatTimeUntil = (targetTime: number) => {
   return `${minutes}m`;
 };
 
-const predictionStatusCopy = (match: MatchWithState) => {
+const predictionStatusCopy = (match: MatchWithState, now = Date.now()) => {
   if (!match.kickoffAt) {
     return {
       detail: "Family picks stay hidden until kickoff.",
@@ -373,23 +373,23 @@ const predictionStatusCopy = (match: MatchWithState) => {
   const kickoffTime = new Date(match.kickoffAt).getTime();
   const lockTime = kickoffTime - PREDICTION_LOCK_MS;
 
-  if (kickoffTime <= Date.now()) {
+  if (kickoffTime <= now) {
     return {
       detail: "Everyone's saved picks are visible now.",
       summary: "Family picks revealed"
     };
   }
 
-  if (lockTime <= Date.now()) {
+  if (lockTime <= now) {
     return {
-      detail: `Family picks reveal at kickoff in ${formatTimeUntil(kickoffTime)}.`,
+      detail: `Family picks reveal at kickoff in ${formatTimeUntil(kickoffTime, now)}.`,
       summary: "Locked"
     };
   }
 
   return {
-    detail: `You can edit for ${formatTimeUntil(lockTime)}. Family picks reveal at kickoff in ${formatTimeUntil(kickoffTime)}.`,
-    summary: `Locks in ${formatTimeUntil(lockTime)}`
+    detail: `You can edit for ${formatTimeUntil(lockTime, now)}. Family picks reveal at kickoff in ${formatTimeUntil(kickoffTime, now)}.`,
+    summary: `Locks in ${formatTimeUntil(lockTime, now)}`
   };
 };
 
@@ -522,6 +522,12 @@ const resultLabelForForecast = (match: MatchWithState, forecast: FamilyForecast)
   if (second && leader.picks === second.picks) return "Split decision";
   return `${leader.label} leads`;
 };
+
+const forecastResultCounts = (match: MatchWithState, forecast: FamilyForecast) => [
+  { label: match.homeTeam.code, picks: forecast.homeResultPicks },
+  { label: "Draw", picks: forecast.drawResultPicks },
+  { label: match.awayTeam.code, picks: forecast.awayResultPicks }
+];
 
 const forecastFromRows = (rows: ForecastRow[] | null | undefined) =>
   (rows ?? []).reduce(
@@ -886,6 +892,7 @@ export function WorldCupPredictor() {
   const [selectedHistoryPlayerId, setSelectedHistoryPlayerId] = useState<string | null>(null);
   const [historyPointFilter, setHistoryPointFilter] = useState<HistoryPointFilter>("all");
   const [profileReady, setProfileReady] = useState(!isSupabaseConfigured);
+  const [currentTime, setCurrentTime] = useState(() => Date.now());
 
   const isAdmin = session?.user.app_metadata?.role === "admin";
 
@@ -1137,6 +1144,11 @@ export function WorldCupPredictor() {
     loadAdminMissingPicks();
   }, [activeWorkspaceTab, isAdmin, isLoaded, session?.access_token]);
 
+  useEffect(() => {
+    const timer = window.setInterval(() => setCurrentTime(Date.now()), 30000);
+    return () => window.clearInterval(timer);
+  }, []);
+
   const activePlayer = players.find((player) => player.id === activePlayerId) ?? players[0];
   const visibleFamilyForecasts = useMemo(
     () => (isSupabaseConfigured ? familyForecasts : localForecastsFromPlayers(players, matches, activePlayer)),
@@ -1179,7 +1191,7 @@ export function WorldCupPredictor() {
 
     if (!showUpcomingOnly) return nextMatches;
     return nextMatches.filter(isUpcomingMatch).slice(0, NEXT_UPCOMING_MATCH_COUNT);
-  }, [activeDateFilter, activeGroupFilter, activePlayer, activeTeamFilter, groupStageMatchList, showMissingOnly, showUpcomingOnly]);
+  }, [activeDateFilter, activeGroupFilter, activePlayer, activeTeamFilter, currentTime, groupStageMatchList, showMissingOnly, showUpcomingOnly]);
   const filteredKnockoutMatches = useMemo(() => {
     let nextMatches = sortMatchesByKickoff(knockoutMatchList);
 
@@ -1189,7 +1201,7 @@ export function WorldCupPredictor() {
 
     if (!showUpcomingOnly) return nextMatches;
     return nextMatches.filter(isUpcomingMatch).slice(0, NEXT_UPCOMING_MATCH_COUNT);
-  }, [activePlayer, knockoutMatchList, showMissingOnly, showUpcomingOnly]);
+  }, [activePlayer, currentTime, knockoutMatchList, showMissingOnly, showUpcomingOnly]);
   const knockoutMatchesByRound = useMemo(
     () =>
       knockoutRounds
@@ -1202,18 +1214,18 @@ export function WorldCupPredictor() {
   );
   const priorityCount = useMemo(
     () => filteredMatches.filter((match) => isPriorityPick(match, activePlayer?.matchPredictions[match.id])).length,
-    [activePlayer?.matchPredictions, filteredMatches]
+    [activePlayer?.matchPredictions, currentTime, filteredMatches]
   );
-  const nextMatches = useMemo(() => nextKickoffMatches(matches), [matches]);
+  const nextMatches = useMemo(() => nextKickoffMatches(matches), [currentTime, matches]);
   const familyFeaturedMatches = useMemo(() => {
     const todayUsKey = matchDateKeyInTimeZone(new Date().toISOString());
     return sortMatchesByKickoff(matches).filter((match) => match.kickoffAt && matchDateKeyInTimeZone(match.kickoffAt) === todayUsKey);
-  }, [matches]);
+  }, [currentTime, matches]);
   const familyYesterdayMatches = useMemo(() => {
     const yesterday = new Date(Date.now() - 24 * 60 * 60 * 1000);
     const yesterdayUsKey = matchDateKeyInTimeZone(yesterday.toISOString());
     return sortMatchesByKickoff(matches).filter((match) => match.kickoffAt && matchDateKeyInTimeZone(match.kickoffAt) === yesterdayUsKey);
-  }, [matches]);
+  }, [currentTime, matches]);
   const adminTodayMissingPickCount = adminMissingPickRows.reduce((total, row) => total + row.missingPlayers.length, 0);
   const visibleGroups = worldCupGroups.filter((group) => filteredMatches.some((match) => match.groupId === group.id));
   const resultCount = completedCount(results, matches);
@@ -1223,7 +1235,7 @@ export function WorldCupPredictor() {
   const unscoredMatches = useMemo(() => matches.filter((match) => !hasCompletedResult(match, results)), [matches, results]);
   const adminNeedsResultCount = useMemo(
     () => unscoredMatches.filter((match) => hasKickedOff(match)).length,
-    [unscoredMatches]
+    [currentTime, unscoredMatches]
   );
   const adminResultMatches = useMemo(() => {
     const sortedMatches = sortMatchesByKickoff(matches);
@@ -1231,7 +1243,7 @@ export function WorldCupPredictor() {
     if (adminResultFilter === "unscored") return sortedMatches.filter((match) => !hasCompletedResult(match, results));
     if (adminResultFilter === "scored") return sortedMatches.filter((match) => hasCompletedResult(match, results));
     return sortedMatches;
-  }, [adminResultFilter, matches, results]);
+  }, [adminResultFilter, currentTime, matches, results]);
   const adminScoreSyncUsage = useMemo(
     () => ({
       calls: syncRuns.reduce((total, run) => total + (run.request_count ?? 0), 0),
@@ -1603,6 +1615,15 @@ export function WorldCupPredictor() {
     const revealedPicks = revealedPicksForMatch(match);
     const activePick = activePlayer ? normalizeScore(activePlayer.matchPredictions[match.id]) : emptyScore();
     const expanded = Boolean(expandedFamilyPickMatchIds[match.id]);
+    const resultCounts = [
+      { label: match.homeTeam.code, count: revealedPicks.filter((pick) => outcome(pick.score) === "home").length },
+      { label: "Draw", count: revealedPicks.filter((pick) => outcome(pick.score) === "draw").length },
+      { label: match.awayTeam.code, count: revealedPicks.filter((pick) => outcome(pick.score) === "away").length }
+    ];
+    const pointsCounts = [3, 2, 1, 0].map((points) => ({
+      count: hasScore(actualScore) ? revealedPicks.filter((pick) => pick.points === points).length : 0,
+      points
+    }));
 
     return (
       <div className="revealed-picks">
@@ -1614,6 +1635,28 @@ export function WorldCupPredictor() {
         </div>
         {expanded ? (
           <>
+            {revealedPicks.length > 0 ? (
+              <div className="revealed-picks-chart">
+                <div>
+                  <strong>Result lean</strong>
+                  {resultCounts.map((item) => (
+                    <span key={item.label}>
+                      {item.label} <b>{item.count}</b>
+                    </span>
+                  ))}
+                </div>
+                {hasScore(actualScore) ? (
+                  <div>
+                    <strong>Points haul</strong>
+                    {pointsCounts.map((item) => (
+                      <span key={item.points}>
+                        {item.points} pts <b>{item.count}</b>
+                      </span>
+                    ))}
+                  </div>
+                ) : null}
+              </div>
+            ) : null}
             {hasScore(activePick) ? (
               <div className="your-pick-summary">
                 <strong>Your pick</strong>
@@ -1672,6 +1715,7 @@ export function WorldCupPredictor() {
     const actualScore = normalizeScore(results[match.id]);
     const activePick = normalizeScore(activePlayer?.matchPredictions[match.id]);
     const completed = hasScore(actualScore);
+    const forecastCounts = forecast ? forecastResultCounts(match, forecast) : [];
 
     return (
       <article className="next-match-card" key={match.id}>
@@ -1688,7 +1732,7 @@ export function WorldCupPredictor() {
           <span>
             {match.venue}, {match.city}
           </span>
-          <small className="privacy-note">{predictionStatusCopy(match).detail}</small>
+          <small className="privacy-note">{predictionStatusCopy(match, currentTime).detail}</small>
           {hasOdds(match) ? <small className="match-odds">{oddsCopy(match)}</small> : null}
         </div>
         {completed ? <ActualScoreDisplay match={match} points={hasScore(activePick) ? matchPoints(activePick, actualScore) : undefined} score={actualScore} scorers={matchScorersForMatch(match.id)} /> : null}
@@ -1705,6 +1749,18 @@ export function WorldCupPredictor() {
                   {forecast.topScorePicks ? ` (${forecast.topScorePicks} picks)` : ""}
                 </small>
               ) : null}
+              <div className="forecast-bars" aria-label="Family forecast result split">
+                {forecastCounts.map((item) => (
+                  <div key={item.label}>
+                    <span>
+                      {item.label} <b>{item.picks}</b>
+                    </span>
+                    <em>
+                      <i style={{ width: `${Math.max(6, Math.round((item.picks / Math.max(forecast.totalPicks, 1)) * 100))}%` }} />
+                    </em>
+                  </div>
+                ))}
+              </div>
             </>
           ) : (
             <span>
@@ -1718,6 +1774,10 @@ export function WorldCupPredictor() {
         <div className="fun-fact">
           <strong>Fun fact</strong>
           <span>{funFactForMatch(match)}</span>
+          <small>
+            Latest form: {match.homeTeam.code} {teamLatestResult(match.homeTeam.code, matches, results)} · {match.awayTeam.code}{" "}
+            {teamLatestResult(match.awayTeam.code, matches, results)}
+          </small>
         </div>
       </article>
     );
@@ -1737,7 +1797,7 @@ export function WorldCupPredictor() {
     const needsPick = !hasScore(predictedScore) && !locked;
     const priorityPick = isPriorityPick(match, predictedScore);
     const rowState = locked ? "locked" : lockWarning ? "lock-warning" : priorityPick ? "priority" : needsPick ? "needs-pick" : "";
-    const statusCopy = predictionStatusCopy(match);
+    const statusCopy = predictionStatusCopy(match, currentTime);
     const showDetailedPrivacy = isTodayMatch(match) || familyFeaturedMatches.some((featuredMatch) => featuredMatch.id === match.id);
 
     return (

@@ -1,6 +1,6 @@
 # World Cup Predictor Backlog
 
-Last reviewed: 2026-06-08
+Last reviewed: 2026-06-14
 
 ## Current State
 
@@ -14,7 +14,7 @@ Last reviewed: 2026-06-08
 - Group-stage match rows are seeded with official match numbers, kickoff times, venues, and cities.
 - Picks and family leaderboard are split into separate app tabs.
 - The app highlights the next match or simultaneous next matches near the top of the page.
-- Vercel Cron is configured to call score sync daily on the Hobby plan.
+- Vercel Cron is configured to call score sync several times per day during common match-finish windows.
 - Automated tests cover scoring, lock timing, reveal timing, completion, and next-match logic.
 - Knockout rounds are available as bracket-placeholder fixtures.
 - A scorers tab is available and wired to provider-synced scorer data.
@@ -148,7 +148,7 @@ Confirmed by:
 
 ### 10. Source Actual Scores Automatically
 
-Status: mostly implemented
+Status: implemented, monitor provider timing
 
 Candidate: football-data.org
 
@@ -176,16 +176,17 @@ Implementation notes:
 - Test `GET https://api.football-data.org/v4/competitions/WC/matches?season=2026` once 2026 fixtures/results are available.
 - External mapping fields and odds fields have been added to `matches`.
 - A protected `/api/sync-scores` route pulls scores/odds and writes actual scores into Supabase for admin users.
-- Vercel Cron is configured to call `/api/sync-scores` daily because Vercel Hobby does not allow hourly cron jobs.
+- Vercel Cron is configured to call `/api/sync-scores` before the daily digest and at extra match-finish windows.
 - Cron calls require `CRON_SECRET` as a bearer token.
 - `CRON_SECRET` has been added in Vercel.
 - `last_synced_at` shows when scores were last updated.
+- Manual score sync has worked successfully after a finished match.
 
 Remaining:
-- Confirm the production daily cron invocation after the next deployment.
-- Decide whether to upgrade Vercel or use another scheduler for more frequent score checks during the tournament.
-- Re-test once football-data.org has final/live 2026 match data available.
+- Monitor how quickly football-data.org publishes final scores on the current plan.
 - Odds are parked for now. football-data requires the Odds Add-On and SportsGameOdds was tested but `INTERNATIONAL_SOCCER` is unavailable on the current free tier. It may be worth revisiting for another competition or if a paid plan is ever useful.
+- API-Football was tested as an alternative richer provider. The free plan is active with 100 requests/day, but World Cup 2026 is blocked on the free plan with the message: "Free plans do not have access to this season, try from 2022 to 2024." Park this for now and revisit if the paid tier, around GBP 19, becomes worthwhile.
+- API-Football 2022 World Cup test confirmed useful endpoints work when the season is accessible: fixtures, livescore/status, events, lineups, top scorers, player/coach data, injuries/sidelined, statistics, predictions, standings, head-to-head, transfers/trophies, and pre-match/in-play odds.
 
 ### 11. Add Knockout Rounds
 
@@ -204,7 +205,7 @@ Remaining:
 
 ### 12. Track Tournament Scorers
 
-Status: partially implemented
+Status: parked on free providers
 
 Football-data.org has a competition scorers endpoint, but plan access still needs to be confirmed with an API token.
 
@@ -215,7 +216,8 @@ Implementation:
 - Sync does not fail if scorers are unavailable or plan-gated.
 
 Remaining:
-- Confirm whether World Cup scorers are available on the free plan once tournament data is live.
+- football-data.org does not provide scorers/team event data on the current free access.
+- Decide whether to pay for API-Football access. If upgraded, add a `match_events` or `match_goals` table and use `/fixtures/events` for scorer, assist, minute, cards, VAR, and substitutions. Consider `/fixtures/statistics`, `/fixtures/lineups`, and `/players/topscorers` for richer match cards and the scorers tab.
 - Decide whether scorer tracking is informational only or part of the family game.
 
 ### 13. Monitor Fixture Schedule Changes
@@ -265,7 +267,7 @@ Remaining:
 
 ### 17. UX Polish For Locked Matches
 
-Status: partially implemented
+Status: mostly implemented
 
 Improve the “private until kickoff” experience:
 
@@ -274,14 +276,15 @@ Implemented:
 - Countdown-style lock/reveal copy on match rows.
 - Next-match panel shows lock/reveal status.
 - Explains that other players' exact scores stay private until kickoff.
+- Countdown copy refreshes without requiring a page reload.
+- Revealed family picks include a compact result-lean and points-haul summary.
 
 Remaining:
-- Add a richer “revealed” view/chart after kickoff.
-- Consider live countdown refresh without requiring page reload.
+- Consider a richer post-match chart if the family wants more detail.
 
 ### 17a. Family Forecast And Fun Facts
 
-Status: partially implemented
+Status: mostly implemented
 
 Implemented:
 - Next-match cards show anonymous family forecast data when enough people have picked.
@@ -289,6 +292,8 @@ Implemented:
 - Before kickoff, a player must make their own pick before seeing the aggregate family lean.
 - Forecasts show the most popular result and top scoreline without naming individual players.
 - Next-match cards show stable World Cup fun facts.
+- Forecasts include compact result-split bars.
+- Fun fact cards include each team's latest recorded result.
 
 Remaining:
 - Add richer country, stadium, and team-specific facts.
@@ -297,7 +302,7 @@ Remaining:
 
 ### 18. Mobile Pass
 
-Status: partially implemented
+Status: mostly implemented
 
 The app is responsive, but needs a proper phone walkthrough:
 
@@ -314,7 +319,7 @@ Implemented:
 - Verified production page at 390px viewport without horizontal overflow.
 
 Remaining:
-- Verify production sign-in and admin flows on an actual phone.
+- Verify admin-only flows on an actual phone.
 
 ### 19. Tests
 
@@ -343,7 +348,7 @@ Remaining:
 
 ### 20. Daily Email Digest
 
-Status: implemented, needs production email credentials
+Status: done
 
 Implementation:
 - Added `players.daily_digest_opt_in`.
@@ -353,8 +358,6 @@ Implementation:
 - Digest includes leaderboard, previous day's games, each player's picks and points, today's fixtures, and a light data-driven summary.
 
 Remaining:
-- Add `BREVO_API_KEY`, `DIGEST_SENDER_EMAIL`, `DIGEST_SENDER_NAME`, and `NEXT_PUBLIC_SITE_URL` in Vercel.
-- Send a manual test digest after Brevo credentials are configured.
 - Optional later: add an external facts/news source for richer match facts.
 
 ### 21. Dependency Audit
@@ -383,3 +386,5 @@ Do not run `npm audit fix --force` blindly. Review whether the affected packages
 - Added knockout-round fixtures and a Knockouts tab.
 - Added tournament scorer storage, sync attempt, and Scorers tab.
 - Split group-game and knockout prediction progress, added collapsible filters, and added missing-score quick filters.
+- Added production daily digest email with opt-in setting and confirmed delivery.
+- Added extra score sync cron windows for common match-finish times.
