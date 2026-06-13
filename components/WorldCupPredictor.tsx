@@ -1876,7 +1876,22 @@ export function WorldCupPredictor() {
           ) : null}
         </div>
         {completed ? (
-          <ActualScoreDisplay match={match} points={points} score={actualScore} scorers={matchScorersForMatch(match.id)} />
+          <>
+            <ActualScoreDisplay match={match} points={points} score={actualScore} scorers={matchScorersForMatch(match.id)} />
+            {isAdmin ? (
+              <div className="completed-admin-score">
+                <ScoreInputs
+                  label={`Admin actual score for ${match.label}`}
+                  match={match}
+                  onChange={(score) => updateResultScore(match.id, score)}
+                  score={actualScore}
+                />
+                <button className="text-button admin-clear-button" onClick={() => updateResultScore(match.id, emptyScore())} type="button">
+                  Clear actual score
+                </button>
+              </div>
+            ) : null}
+          </>
         ) : (
           <>
             <ScoreInputs

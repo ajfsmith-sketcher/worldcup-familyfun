@@ -665,6 +665,16 @@ h2 {
   gap: 8px;
 }
 
+.completed-admin-score {
+  background: #fff;
+  border: 1px dashed var(--line);
+  border-radius: 8px;
+  display: grid;
+  gap: 8px;
+  grid-column: 1 / -1;
+  padding: 10px;
+}
+
 .actual-score-heading {
   align-items: center;
   display: flex;
