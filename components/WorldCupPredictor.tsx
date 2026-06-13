@@ -138,6 +138,14 @@ type ScorerRow = {
   team_name: string | null;
 };
 
+type MatchScorerRow = {
+  id: string;
+  match_id: string;
+  minute: number | null;
+  player_name: string;
+  team_code: string | null;
+};
+
 type SyncRunRow = {
   created_at: string;
   error: string | null;
@@ -704,6 +712,49 @@ function ScoreInputs({
   );
 }
 
+function ActualScoreDisplay({
+  match,
+  points,
+  score,
+  scorers = []
+}: {
+  match: MatchWithState;
+  points?: number;
+  score: ScorePick;
+  scorers?: MatchScorerRow[];
+}) {
+  return (
+    <div className="actual-score-card">
+      <div className="actual-score-heading">
+        <strong>Actual score</strong>
+        {points !== undefined ? <span>{points} pts</span> : null}
+      </div>
+      <div className="actual-score-entry" aria-label={`Actual score for ${match.label}`}>
+        <label>
+          <span>{match.homeTeam.code}</span>
+          <b>{score.home}</b>
+        </label>
+        <em>-</em>
+        <label>
+          <span>{match.awayTeam.code}</span>
+          <b>{score.away}</b>
+        </label>
+      </div>
+      {scorers.length > 0 ? (
+        <div className="match-scorers">
+          {scorers.map((scorer) => (
+            <span key={scorer.id}>
+              {scorer.team_code ? `${scorer.team_code} ` : ""}
+              {scorer.player_name}
+              {scorer.minute ? ` ${scorer.minute}'` : ""}
+            </span>
+          ))}
+        </div>
+      ) : null}
+    </div>
+  );
+}
+
 export function WorldCupPredictor() {
   const [players, setPlayers] = useState<Player[]>([]);
   const [matches, setMatches] = useState<MatchWithState[]>(worldCupMatches);
@@ -739,6 +790,7 @@ export function WorldCupPredictor() {
   const [isLeagueCollapsed, setIsLeagueCollapsed] = useState(true);
   const [isBraggingRightsCollapsed, setIsBraggingRightsCollapsed] = useState(true);
   const [expandedFamilyPickMatchIds, setExpandedFamilyPickMatchIds] = useState<Record<string, boolean>>({});
+  const [selectedHistoryPlayerId, setSelectedHistoryPlayerId] = useState<string | null>(null);
   const [profileReady, setProfileReady] = useState(!isSupabaseConfigured);
 
   const isAdmin = session?.user.app_metadata?.role === "admin";
@@ -1451,6 +1503,11 @@ export function WorldCupPredictor() {
       })
       .filter((row): row is { actualScore: ScorePick; match: MatchWithState; points: number; prediction: ScorePick } => Boolean(row));
 
+  const matchScorersForMatch = (_matchId: string): MatchScorerRow[] => [];
+
+  const selectedHistoryPlayer = selectedHistoryPlayerId ? standings.find((player) => player.id === selectedHistoryPlayerId) : undefined;
+  const selectedHistoryRows = selectedHistoryPlayer ? completedPredictionRowsForPlayer(selectedHistoryPlayer) : [];
+
   const renderNextMatchCard = (match: MatchWithState) => {
     const forecast = visibleFamilyForecasts[match.id];
     const revealed = arePredictionsRevealed(match);
@@ -1476,15 +1533,7 @@ export function WorldCupPredictor() {
           <small className="privacy-note">{predictionStatusCopy(match).detail}</small>
           {hasOdds(match) ? <small className="match-odds">{oddsCopy(match)}</small> : null}
         </div>
-        {completed ? (
-          <div className="completed-match-summary">
-            <strong>Actual score</strong>
-            <span>
-              {actualScore.home}-{actualScore.away}
-              {hasScore(activePick) ? ` · ${matchPoints(activePick, actualScore)} pts` : ""}
-            </span>
-          </div>
-        ) : null}
+        {completed ? <ActualScoreDisplay match={match} points={hasScore(activePick) ? matchPoints(activePick, actualScore) : undefined} score={actualScore} scorers={matchScorersForMatch(match.id)} /> : null}
         <div className="family-forecast">
           <strong>Family forecast</strong>
           {forecast ? (
@@ -1559,12 +1608,7 @@ export function WorldCupPredictor() {
           ) : null}
         </div>
         {completed ? (
-          <div className="completed-match-summary">
-            <strong>Actual score</strong>
-            <span>
-              {actualScore.home}-{actualScore.away}
-            </span>
-          </div>
+          <ActualScoreDisplay match={match} score={actualScore} scorers={matchScorersForMatch(match.id)} />
         ) : (
           <>
             <ScoreInputs
@@ -1743,6 +1787,42 @@ export function WorldCupPredictor() {
               <span>EX: exact scores</span>
               <span>Move: change since the previous scored match</span>
             </div>
+          </div>
+        </div>
+      ) : null}
+
+      {selectedHistoryPlayer ? (
+        <div aria-modal="true" className="info-modal-backdrop" role="dialog">
+          <div className="info-modal player-history-modal">
+            <div className="section-heading">
+              <div>
+                <p className="eyebrow">Completed picks</p>
+                <h2>{selectedHistoryPlayer.name}</h2>
+              </div>
+              <button aria-label="Close player results" className="hero-info-button dark" onClick={() => setSelectedHistoryPlayerId(null)} type="button">
+                ×
+              </button>
+            </div>
+            {selectedHistoryRows.length > 0 ? (
+              <ol className="player-prediction-history">
+                {selectedHistoryRows.map(({ actualScore, match, points, prediction }) => (
+                  <li key={match.id}>
+                    <span>
+                      {match.homeTeam.code} v {match.awayTeam.code}
+                    </span>
+                    <span>
+                      Pick {prediction.home}-{prediction.away}
+                    </span>
+                    <span>
+                      Actual {actualScore.home}-{actualScore.away}
+                    </span>
+                    <strong>{points} pts</strong>
+                  </li>
+                ))}
+              </ol>
+            ) : (
+              <p className="muted-copy">No completed predictions yet.</p>
+            )}
           </div>
         </div>
       ) : null}
@@ -2109,7 +2189,9 @@ export function WorldCupPredictor() {
                                 <td data-label="Rank">{index + 1}</td>
                                 <td data-label="Move">{renderMovement(player.movement)}</td>
                                 <td data-label="Player">
-                                  <strong>{player.name}</strong>
+                                  <button className="player-history-button" onClick={() => setSelectedHistoryPlayerId(player.id)} type="button">
+                                    {player.name}
+                                  </button>
                                   {player.hasNextPending ? (
                                     <small>Missing next {player.nextPendingCount === 1 ? "match" : `${player.nextPendingCount} matches`}</small>
                                   ) : null}
@@ -2126,41 +2208,6 @@ export function WorldCupPredictor() {
                             ))}
                           </tbody>
                         </table>
-                      </div>
-                      <div className="player-prediction-history">
-                        {standings.map((player, index) => {
-                          const completedRows = completedPredictionRowsForPlayer(player);
-                          return (
-                            <details key={player.id}>
-                              <summary>
-                                <span>
-                                  {index + 1}. {player.name}
-                                </span>
-                                <strong>{completedRows.length} completed</strong>
-                              </summary>
-                              {completedRows.length > 0 ? (
-                                <ol>
-                                  {completedRows.map(({ actualScore, match, points, prediction }) => (
-                                    <li key={match.id}>
-                                      <span>
-                                        {match.homeTeam.name} v {match.awayTeam.name}
-                                      </span>
-                                      <span>
-                                        Pick {prediction.home}-{prediction.away}
-                                      </span>
-                                      <span>
-                                        Actual {actualScore.home}-{actualScore.away}
-                                      </span>
-                                      <strong>{points} pts</strong>
-                                    </li>
-                                  ))}
-                                </ol>
-                              ) : (
-                                <p className="muted-copy">No completed predictions yet.</p>
-                              )}
-                            </details>
-                          );
-                        })}
                       </div>
                     </>
                   ) : null}

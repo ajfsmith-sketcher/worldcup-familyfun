@@ -307,9 +307,16 @@ h2 {
   border: 1px solid var(--line);
   border-radius: 8px;
   box-shadow: 0 24px 70px rgba(15, 23, 42, 0.24);
+  max-height: min(86vh, 760px);
   max-width: 520px;
+  overflow: auto;
   padding: 18px;
   width: min(100%, 520px);
+}
+
+.player-history-modal {
+  max-width: 680px;
+  width: min(100%, 680px);
 }
 
 .rules-list {
@@ -505,7 +512,7 @@ h2 {
 
 .family-forecast,
 .fun-fact,
-.completed-match-summary {
+.actual-score-card {
   background: #fff;
   border: 1px solid var(--line);
   border-radius: 8px;
@@ -515,15 +522,85 @@ h2 {
 
 .family-forecast strong,
 .fun-fact strong,
-.completed-match-summary strong {
+.actual-score-heading strong {
   color: var(--accent-strong);
   font-size: 0.78rem;
   text-transform: uppercase;
 }
 
-.completed-match-summary span {
-  color: var(--ink);
+.actual-score-card {
+  display: grid;
+  gap: 8px;
+}
+
+.actual-score-heading {
+  align-items: center;
+  display: flex;
+  gap: 10px;
+  justify-content: space-between;
+}
+
+.actual-score-heading span {
+  color: var(--accent-strong);
+  font-size: 0.82rem;
   font-weight: 900;
+}
+
+.actual-score-entry {
+  align-items: end;
+  display: grid;
+  gap: 8px;
+  grid-template-columns: minmax(0, 1fr) auto minmax(0, 1fr);
+}
+
+.actual-score-entry label {
+  display: grid;
+  gap: 4px;
+}
+
+.actual-score-entry label span {
+  color: var(--muted);
+  font-size: 0.72rem;
+  font-weight: 900;
+  text-align: center;
+}
+
+.actual-score-entry label b {
+  align-items: center;
+  background: var(--surface-muted);
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  color: var(--ink);
+  display: inline-flex;
+  font-size: 1rem;
+  font-weight: 900;
+  height: 40px;
+  justify-content: center;
+  min-width: 48px;
+  padding: 0 12px;
+}
+
+.actual-score-entry em {
+  color: var(--muted);
+  font-style: normal;
+  font-weight: 900;
+  line-height: 40px;
+}
+
+.match-scorers {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+
+.match-scorers span {
+  background: var(--surface-muted);
+  border: 1px solid var(--line);
+  border-radius: 999px;
+  color: var(--ink);
+  font-size: 0.78rem;
+  font-weight: 800;
+  padding: 5px 8px;
 }
 
 .family-forecast small {
@@ -1227,50 +1304,39 @@ h2 {
   font-size: 1.1rem;
 }
 
+.player-history-button {
+  background: none;
+  border: 0;
+  color: var(--accent-strong);
+  cursor: pointer;
+  display: inline;
+  font: inherit;
+  font-weight: 900;
+  overflow-wrap: anywhere;
+  padding: 0;
+  text-align: left;
+  text-decoration: underline;
+  text-decoration-thickness: 2px;
+  text-underline-offset: 3px;
+}
+
 .player-prediction-history {
   display: grid;
   gap: 8px;
   margin-top: 12px;
-}
-
-.player-prediction-history details {
-  background: var(--surface-muted);
-  border: 1px solid var(--line);
-  border-radius: 8px;
-  padding: 10px;
-}
-
-.player-prediction-history summary {
-  align-items: center;
-  cursor: pointer;
-  display: flex;
-  gap: 10px;
-  justify-content: space-between;
-}
-
-.player-prediction-history summary span,
-.player-prediction-history summary strong {
-  font-weight: 900;
-  overflow-wrap: anywhere;
-}
-
-.player-prediction-history summary strong {
-  color: var(--accent-strong);
-  font-size: 0.82rem;
-}
-
-.player-prediction-history ol {
-  display: grid;
-  gap: 6px;
-  margin: 10px 0 0;
+  margin-bottom: 0;
   padding-left: 20px;
 }
 
 .player-prediction-history li {
   align-items: center;
+  background: var(--surface-muted);
+  border: 1px solid var(--line);
+  border-radius: 8px;
   gap: 8px;
   display: grid;
   grid-template-columns: minmax(0, 1.4fr) auto auto auto;
+  padding: 10px;
 }
 
 .player-prediction-history li span {
