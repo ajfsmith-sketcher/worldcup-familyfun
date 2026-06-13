@@ -209,6 +209,7 @@ type SavedUiPreferences = {
 
 const STORAGE_KEY = "world-cup-2026-family-predictor";
 const UI_PREFS_KEY = "world-cup-2026-ui-preferences";
+const SCOTLAND_CELEBRATION_KEY = "world-cup-2026-scotland-celebrations";
 const NEXT_UPCOMING_MATCH_COUNT = 4;
 const FAMILY_FORECAST_MINIMUM_PICKS = 4;
 const CODEX_PLAYER_ID = "codex-var-dex";
@@ -485,6 +486,18 @@ const teamLatestResult = (teamCode: string, currentMatches: MatchWithState[], re
   const result = teamScore > opponentScore ? "W" : teamScore < opponentScore ? "L" : "D";
   return `${result} ${teamScore}-${opponentScore} ${opponentCode}`;
 };
+
+const scotlandWinMatchIds = (currentMatches: MatchWithState[], results: Record<string, ScorePick>) =>
+  sortMatchesByKickoff(currentMatches)
+    .filter((match) => {
+      if (match.homeTeam.code !== "SCO" && match.awayTeam.code !== "SCO") return false;
+      const score = results[match.id];
+      if (!hasScore(score)) return false;
+      const scotlandScore = Number(match.homeTeam.code === "SCO" ? score.home : score.away);
+      const opponentScore = Number(match.homeTeam.code === "SCO" ? score.away : score.home);
+      return scotlandScore > opponentScore;
+    })
+    .map((match) => match.id);
 
 const formatMatchDate = (match: MatchWithState) =>
   match.kickoffAt ? new Intl.DateTimeFormat("en-GB", { dateStyle: "full" }).format(new Date(match.kickoffAt)) : "Kickoff TBC";
@@ -893,6 +906,7 @@ export function WorldCupPredictor() {
   const [historyPointFilter, setHistoryPointFilter] = useState<HistoryPointFilter>("all");
   const [profileReady, setProfileReady] = useState(!isSupabaseConfigured);
   const [currentTime, setCurrentTime] = useState(() => Date.now());
+  const [scotlandCelebrationMatchId, setScotlandCelebrationMatchId] = useState<string | null>(null);
 
   const isAdmin = session?.user.app_metadata?.role === "admin";
 
@@ -1149,6 +1163,13 @@ export function WorldCupPredictor() {
     return () => window.clearInterval(timer);
   }, []);
 
+  useEffect(() => {
+    if (!isLoaded || typeof window === "undefined") return;
+    const winIds = scotlandWinMatchIds(matches, results);
+    const nextWinId = winIds.find((matchId) => !window.localStorage.getItem(`${SCOTLAND_CELEBRATION_KEY}:${matchId}`));
+    setScotlandCelebrationMatchId(nextWinId ?? null);
+  }, [isLoaded, matches, results]);
+
   const activePlayer = players.find((player) => player.id === activePlayerId) ?? players[0];
   const visibleFamilyForecasts = useMemo(
     () => (isSupabaseConfigured ? familyForecasts : localForecastsFromPlayers(players, matches, activePlayer)),
@@ -1274,6 +1295,7 @@ export function WorldCupPredictor() {
             hasNextPending: Boolean(player.nextPendingCount),
             knockoutPickCount:
               typeof player.knockoutPredictionCount === "number" ? player.knockoutPredictionCount : completedCount(player.matchPredictions, knockoutMatchList),
+            missedPicks: scoredMatchSet.filter((match) => !hasScore(player.matchPredictions[match.id])).length,
             pickCount: typeof player.predictionCount === "number" ? player.predictionCount : completedCount(player.matchPredictions, matches),
             resultCorrect: scoredMatchSet.filter((match) => outcome(player.matchPredictions[match.id]) === outcome(results[match.id])).length,
             score: scorePlayer(player, results, scoredMatchSet)
@@ -1301,6 +1323,13 @@ export function WorldCupPredictor() {
     if (movement > 0) return <span className="standing-move up">▲ {movement}</span>;
     if (movement < 0) return <span className="standing-move down">▼ {Math.abs(movement)}</span>;
     return <span className="standing-move flat">-</span>;
+  };
+
+  const dismissScotlandCelebration = () => {
+    if (scotlandCelebrationMatchId) {
+      window.localStorage.setItem(`${SCOTLAND_CELEBRATION_KEY}:${scotlandCelebrationMatchId}`, "seen");
+    }
+    setScotlandCelebrationMatchId(null);
   };
 
   const signIn = async () => {
@@ -1629,15 +1658,20 @@ export function WorldCupPredictor() {
       <div className="revealed-picks">
         <div className="revealed-picks-heading">
           <strong>Family picks</strong>
-          <button className="text-button" onClick={() => setExpandedFamilyPickMatchIds((current) => ({ ...current, [match.id]: !expanded }))} type="button">
-            {expanded ? "Hide" : "Show"}
+          <button
+            aria-label={expanded ? "Collapse family picks" : "Expand family picks"}
+            className="icon-text-button"
+            onClick={() => setExpandedFamilyPickMatchIds((current) => ({ ...current, [match.id]: !expanded }))}
+            type="button"
+          >
+            {expanded ? "-" : "+"}
           </button>
         </div>
         {expanded ? (
           <>
             {revealedPicks.length > 0 ? (
               <div className="revealed-picks-chart">
-                <div>
+                <div className="revealed-chart-row result">
                   <strong>Result lean</strong>
                   {resultCounts.map((item) => (
                     <span key={item.label}>
@@ -1646,7 +1680,7 @@ export function WorldCupPredictor() {
                   ))}
                 </div>
                 {hasScore(actualScore) ? (
-                  <div>
+                  <div className="revealed-chart-row haul">
                     <strong>Points haul</strong>
                     {pointsCounts.map((item) => (
                       <span key={item.points}>
@@ -1897,8 +1931,30 @@ export function WorldCupPredictor() {
     );
   }
 
+  const scotlandCelebrationMatch = scotlandCelebrationMatchId ? matches.find((match) => match.id === scotlandCelebrationMatchId) : undefined;
+
   return (
     <main className="shell predictor-shell">
+      {scotlandCelebrationMatch ? (
+        <div aria-live="polite" className="scotland-celebration" role="status">
+          <div className="scotland-ribbons" aria-hidden="true">
+            {Array.from({ length: 16 }).map((_, index) => (
+              <span key={index} />
+            ))}
+          </div>
+          <div className="scotland-celebration-card">
+            <p className="eyebrow">Tartan Army mode unlocked</p>
+            <h2>Scotland win</h2>
+            <p>
+              {scotlandCelebrationMatch.homeTeam.flag} {scotlandCelebrationMatch.homeTeam.name} vs {scotlandCelebrationMatch.awayTeam.flag}{" "}
+              {scotlandCelebrationMatch.awayTeam.name}
+            </p>
+            <button className="text-button" onClick={dismissScotlandCelebration} type="button">
+              Back to the table
+            </button>
+          </div>
+        </div>
+      ) : null}
       <header className="predictor-hero">
         <div className="predictor-hero-copy">
           <p className="eyebrow">Family World Cup pool</p>
@@ -2012,6 +2068,7 @@ export function WorldCupPredictor() {
               <span>GI: team scores missed</span>
               <span>RC: results correct</span>
               <span>EX: exact scores</span>
+              <span>MP: missed picks on completed games</span>
               <span>Move: change since the previous scored match</span>
             </div>
           </div>
@@ -2436,6 +2493,7 @@ export function WorldCupPredictor() {
                               <th>GI</th>
                               <th>RC</th>
                               <th>EX</th>
+                              <th>MP</th>
                               <th>Pts</th>
                             </tr>
                           </thead>
@@ -2460,6 +2518,7 @@ export function WorldCupPredictor() {
                                 <td data-label="Goals incorrect">{player.goalsIncorrect}</td>
                                 <td data-label="Results correct">{player.resultCorrect}</td>
                                 <td data-label="Exact scores">{player.exactScores}</td>
+                                <td data-label="Missed picks">{player.missedPicks}</td>
                                 <td data-label="Points">
                                   <b>{player.score}</b>
                                 </td>
