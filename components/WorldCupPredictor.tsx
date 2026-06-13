@@ -159,16 +159,23 @@ type SavedState = {
   activePlayerId: string;
   activeTeamFilter: TeamFilter;
   activeView: ViewMode;
-  hideCompleted: boolean;
   filtersCollapsed: boolean;
   players: Player[];
   results: Record<string, ScorePick>;
-  showMissingOnly: boolean;
   showUpcomingOnly: boolean;
 };
 
+type SavedUiPreferences = {
+  filtersCollapsed?: boolean;
+  isBraggingRightsCollapsed?: boolean;
+  isLeagueCollapsed?: boolean;
+  isTodayMatchesCollapsed?: boolean;
+  showUpcomingOnly?: boolean;
+};
+
 const STORAGE_KEY = "world-cup-2026-family-predictor";
-const NEXT_UPCOMING_MATCH_COUNT = 8;
+const UI_PREFS_KEY = "world-cup-2026-ui-preferences";
+const NEXT_UPCOMING_MATCH_COUNT = 4;
 const FAMILY_FORECAST_MINIMUM_PICKS = 4;
 const CODEX_PLAYER_ID = "codex-var-dex";
 const CODEX_PLAYER_NAME = "VAR-dex";
@@ -708,8 +715,6 @@ export function WorldCupPredictor() {
   const [activeGroupFilter, setActiveGroupFilter] = useState<GroupFilter>("all");
   const [activeTeamFilter, setActiveTeamFilter] = useState<TeamFilter>("all");
   const [showUpcomingOnly, setShowUpcomingOnly] = useState(false);
-  const [hideCompleted, setHideCompleted] = useState(false);
-  const [showMissingOnly, setShowMissingOnly] = useState(false);
   const [filtersCollapsed, setFiltersCollapsed] = useState(false);
   const [adminResultFilter, setAdminResultFilter] = useState<AdminResultFilter>("needs-result");
   const [results, setResults] = useState<Record<string, ScorePick>>(emptyMatchScores);
@@ -729,11 +734,26 @@ export function WorldCupPredictor() {
   const [isTableKeyOpen, setIsTableKeyOpen] = useState(false);
   const [isTodayMatchesCollapsed, setIsTodayMatchesCollapsed] = useState(false);
   const [isLeagueCollapsed, setIsLeagueCollapsed] = useState(false);
+  const [isBraggingRightsCollapsed, setIsBraggingRightsCollapsed] = useState(false);
   const [profileReady, setProfileReady] = useState(!isSupabaseConfigured);
 
   const isAdmin = session?.user.app_metadata?.role === "admin";
 
   const loadLocalState = () => {
+    const savedPrefs = window.localStorage.getItem(UI_PREFS_KEY);
+    if (savedPrefs) {
+      try {
+        const parsedPrefs = JSON.parse(savedPrefs) as SavedUiPreferences;
+        setFiltersCollapsed(Boolean(parsedPrefs.filtersCollapsed));
+        setIsTodayMatchesCollapsed(Boolean(parsedPrefs.isTodayMatchesCollapsed));
+        setIsLeagueCollapsed(Boolean(parsedPrefs.isLeagueCollapsed));
+        setIsBraggingRightsCollapsed(Boolean(parsedPrefs.isBraggingRightsCollapsed));
+        setShowUpcomingOnly(Boolean(parsedPrefs.showUpcomingOnly));
+      } catch {
+        // Ignore invalid UI preferences.
+      }
+    }
+
     const saved = window.localStorage.getItem(STORAGE_KEY);
     if (saved) {
       try {
@@ -748,8 +768,6 @@ export function WorldCupPredictor() {
             setActiveGroupFilter(typeof parsed.activeGroupFilter === "string" ? parsed.activeGroupFilter : "all");
             setActiveTeamFilter(typeof parsed.activeTeamFilter === "string" ? parsed.activeTeamFilter : "all");
             setShowUpcomingOnly(Boolean(parsed.showUpcomingOnly));
-            setHideCompleted(Boolean(parsed.hideCompleted));
-            setShowMissingOnly(Boolean(parsed.showMissingOnly));
             setFiltersCollapsed(Boolean(parsed.filtersCollapsed));
             setResults({
             ...emptyMatchScores(),
@@ -895,6 +913,35 @@ export function WorldCupPredictor() {
   }, []);
 
   useEffect(() => {
+    const savedPrefs = window.localStorage.getItem(UI_PREFS_KEY);
+    if (!savedPrefs) return;
+    try {
+      const parsedPrefs = JSON.parse(savedPrefs) as SavedUiPreferences;
+      setFiltersCollapsed(Boolean(parsedPrefs.filtersCollapsed));
+      setIsTodayMatchesCollapsed(Boolean(parsedPrefs.isTodayMatchesCollapsed));
+      setIsLeagueCollapsed(Boolean(parsedPrefs.isLeagueCollapsed));
+      setIsBraggingRightsCollapsed(Boolean(parsedPrefs.isBraggingRightsCollapsed));
+      setShowUpcomingOnly(Boolean(parsedPrefs.showUpcomingOnly));
+    } catch {
+      // Ignore invalid UI preferences.
+    }
+  }, []);
+
+  useEffect(() => {
+    if (!isLoaded) return;
+    window.localStorage.setItem(
+      UI_PREFS_KEY,
+      JSON.stringify({
+        filtersCollapsed,
+        isBraggingRightsCollapsed,
+        isLeagueCollapsed,
+        isTodayMatchesCollapsed,
+        showUpcomingOnly
+      } satisfies SavedUiPreferences)
+    );
+  }, [filtersCollapsed, isBraggingRightsCollapsed, isLeagueCollapsed, isLoaded, isTodayMatchesCollapsed, showUpcomingOnly]);
+
+  useEffect(() => {
     if (!isLoaded || isSupabaseConfigured) return;
     window.localStorage.setItem(
       STORAGE_KEY,
@@ -905,14 +952,12 @@ export function WorldCupPredictor() {
         activeTeamFilter,
         activeView,
         filtersCollapsed,
-        hideCompleted,
         players,
         results,
-        showMissingOnly,
         showUpcomingOnly
       })
     );
-  }, [activeDateFilter, activeGroupFilter, activePlayerId, activeTeamFilter, activeView, filtersCollapsed, hideCompleted, isLoaded, players, results, showMissingOnly, showUpcomingOnly]);
+  }, [activeDateFilter, activeGroupFilter, activePlayerId, activeTeamFilter, activeView, filtersCollapsed, isLoaded, players, results, showUpcomingOnly]);
 
   const activePlayer = players.find((player) => player.id === activePlayerId) ?? players[0];
   const visibleFamilyForecasts = useMemo(
@@ -947,24 +992,18 @@ export function WorldCupPredictor() {
       const matchesGroup = activeGroupFilter === "all" || match.groupId === activeGroupFilter;
       const matchesDate =
         activeDateFilter === "all" || (activeDateFilter === "today" ? isTodayMatch(match) : matchDateKey(match) === activeDateFilter);
-      const matchesCompleted = !hideCompleted || !hasCompletedResult(match, results);
-      const matchesMissing = !showMissingOnly || !hasScore(activePlayer?.matchPredictions[match.id]);
-      return matchesTeam && matchesGroup && matchesDate && matchesCompleted && matchesMissing;
+      return matchesTeam && matchesGroup && matchesDate;
     });
 
     if (!showUpcomingOnly) return nextMatches;
     return nextMatches.filter(isUpcomingMatch).slice(0, NEXT_UPCOMING_MATCH_COUNT);
-  }, [activeDateFilter, activeGroupFilter, activePlayer?.matchPredictions, activeTeamFilter, groupStageMatchList, hideCompleted, results, showMissingOnly, showUpcomingOnly]);
+  }, [activeDateFilter, activeGroupFilter, activeTeamFilter, groupStageMatchList, showUpcomingOnly]);
   const filteredKnockoutMatches = useMemo(() => {
-    const nextMatches = sortMatchesByKickoff(knockoutMatchList).filter((match) => {
-      const matchesCompleted = !hideCompleted || !hasCompletedResult(match, results);
-      const matchesMissing = !showMissingOnly || !hasScore(activePlayer?.matchPredictions[match.id]);
-      return matchesCompleted && matchesMissing;
-    });
+    const nextMatches = sortMatchesByKickoff(knockoutMatchList);
 
     if (!showUpcomingOnly) return nextMatches;
     return nextMatches.filter(isUpcomingMatch).slice(0, NEXT_UPCOMING_MATCH_COUNT);
-  }, [activePlayer?.matchPredictions, hideCompleted, knockoutMatchList, results, showMissingOnly, showUpcomingOnly]);
+  }, [knockoutMatchList, showUpcomingOnly]);
   const knockoutMatchesByRound = useMemo(
     () =>
       knockoutRounds
@@ -1283,8 +1322,6 @@ export function WorldCupPredictor() {
     setActiveGroupFilter("all");
     setActiveTeamFilter("all");
     setShowUpcomingOnly(false);
-    setHideCompleted(false);
-    setShowMissingOnly(false);
     setFiltersCollapsed(false);
     setResults(emptyMatchScores());
   };
@@ -1779,22 +1816,14 @@ export function WorldCupPredictor() {
                         ))}
                       </select>
                     </label>
+                    <div className="quick-filters" aria-label="Quick match filters">
+                      <label>
+                        <input checked={showUpcomingOnly} onChange={(event) => setShowUpcomingOnly(event.target.checked)} type="checkbox" />
+                        <span>Next {NEXT_UPCOMING_MATCH_COUNT} upcoming games</span>
+                      </label>
+                    </div>
                   </div>
                 ) : null}
-                <div className="quick-filters" aria-label="Quick match filters">
-                  <label>
-                    <input checked={showMissingOnly} onChange={(event) => setShowMissingOnly(event.target.checked)} type="checkbox" />
-                    <span>Missing my scores</span>
-                  </label>
-                  <label>
-                    <input checked={showUpcomingOnly} onChange={(event) => setShowUpcomingOnly(event.target.checked)} type="checkbox" />
-                    <span>Next {NEXT_UPCOMING_MATCH_COUNT} upcoming games</span>
-                  </label>
-                  <label>
-                    <input checked={hideCompleted} onChange={(event) => setHideCompleted(event.target.checked)} type="checkbox" />
-                    <span>Hide completed games</span>
-                  </label>
-                </div>
                 <p className="filter-summary">
                   {priorityCount > 0
                     ? `${priorityCount} priority ${priorityCount === 1 ? "pick" : "picks"} in this view`
@@ -1862,16 +1891,8 @@ export function WorldCupPredictor() {
                 <div className="match-filters compact">
                   <div className="quick-filters" aria-label="Quick knockout filters">
                     <label>
-                      <input checked={showMissingOnly} onChange={(event) => setShowMissingOnly(event.target.checked)} type="checkbox" />
-                      <span>Missing my scores</span>
-                    </label>
-                    <label>
                       <input checked={showUpcomingOnly} onChange={(event) => setShowUpcomingOnly(event.target.checked)} type="checkbox" />
                       <span>Next {NEXT_UPCOMING_MATCH_COUNT} upcoming games</span>
-                    </label>
-                    <label>
-                      <input checked={hideCompleted} onChange={(event) => setHideCompleted(event.target.checked)} type="checkbox" />
-                      <span>Hide completed games</span>
                     </label>
                   </div>
                   <p className="filter-summary">
@@ -2019,18 +2040,31 @@ export function WorldCupPredictor() {
                   ) : null}
                 </section>
 
-                <div className="prediction-summary bragging-rights">
-                  {standings.slice(0, 4).map((player) => (
-                    <article key={player.id}>
-                      <strong>{player.name}</strong>
-                      <span>{player.score} points</span>
-                      <span>{player.pickCount} / {matches.length} picks complete</span>
-                      <small>
-                        {player.exactScores} exact · {player.goalsCorrect} scores correct · {player.resultCorrect} results correct
-                      </small>
-                    </article>
-                  ))}
-                </div>
+                <section className="family-section-card bragging-rights">
+                  <div className="family-section-heading">
+                    <div>
+                      <p className="eyebrow">Form guide</p>
+                      <h3>Bragging rights</h3>
+                    </div>
+                    <button className="icon-text-button" onClick={() => setIsBraggingRightsCollapsed((current) => !current)} type="button">
+                      {isBraggingRightsCollapsed ? "+" : "-"}
+                    </button>
+                  </div>
+                  {!isBraggingRightsCollapsed ? (
+                    <div className="prediction-summary">
+                      {standings.slice(0, 4).map((player) => (
+                        <article key={player.id}>
+                          <strong>{player.name}</strong>
+                          <span>{player.score} points</span>
+                          <span>{player.pickCount} / {matches.length} picks complete</span>
+                          <small>
+                            {player.exactScores} exact · {player.goalsCorrect} scores correct · {player.resultCorrect} results correct
+                          </small>
+                        </article>
+                      ))}
+                    </div>
+                  ) : null}
+                </section>
                 {syncMessage ? <p className="sync-message">{syncMessage}</p> : null}
                 {scoreSyncMessage ? <p className="sync-message">{scoreSyncMessage}</p> : null}
               </section>

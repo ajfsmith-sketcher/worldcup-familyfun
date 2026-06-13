@@ -9,7 +9,7 @@
   "crons": [
     {
       "path": "/api/sync-scores",
-      "schedule": "50 5 * * *"
+      "schedule": "15 * * * *"
     },
     {
       "path": "/api/daily-digest",

@@ -560,6 +560,10 @@ h2 {
   grid-template-columns: repeat(3, minmax(0, 1fr));
 }
 
+.filter-select-grid .quick-filters {
+  grid-column: 1 / -1;
+}
+
 .filter-select-grid label {
   display: grid;
   gap: 6px;
