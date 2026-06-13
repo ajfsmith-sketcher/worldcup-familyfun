@@ -176,6 +176,7 @@ type SavedState = {
   filtersCollapsed: boolean;
   players: Player[];
   results: Record<string, ScorePick>;
+  showMissingOnly: boolean;
   showUpcomingOnly: boolean;
 };
 
@@ -186,6 +187,7 @@ type SavedUiPreferences = {
   isLeagueCollapsed?: boolean;
   isTodayMatchesCollapsed?: boolean;
   isYesterdayMatchesCollapsed?: boolean;
+  showMissingOnly?: boolean;
   showUpcomingOnly?: boolean;
 };
 
@@ -804,11 +806,12 @@ function WorkspaceIcon({ icon }: { icon: WorkspaceTabItem["icon"] }) {
   if (icon === "scorers") {
     return (
       <svg aria-hidden="true" className="workspace-tab-icon" viewBox="0 0 24 24">
-        <path d="M15 6c2.5 0 4 1.5 4 4" />
-        <path d="M5 18c2.8-1.2 5.2-1.4 7.5-.5" />
-        <path d="M13 11l-3.5 3.5" />
-        <path d="M8 13l3 3" />
-        <circle cx="17" cy="17" r="3" />
+        <circle cx="12" cy="12" r="8" />
+        <path d="m12 7 4 3-1.5 5h-5L8 10l4-3Z" />
+        <path d="m8 10-3 .5" />
+        <path d="m16 10 3-.5" />
+        <path d="m9.5 15-1.5 3" />
+        <path d="m14.5 15 1.5 3" />
       </svg>
     );
   }
@@ -835,6 +838,7 @@ export function WorldCupPredictor() {
   const [activeGroupFilter, setActiveGroupFilter] = useState<GroupFilter>("all");
   const [activeTeamFilter, setActiveTeamFilter] = useState<TeamFilter>("all");
   const [showUpcomingOnly, setShowUpcomingOnly] = useState(false);
+  const [showMissingOnly, setShowMissingOnly] = useState(false);
   const [filtersCollapsed, setFiltersCollapsed] = useState(false);
   const [adminResultFilter, setAdminResultFilter] = useState<AdminResultFilter>("needs-result");
   const [results, setResults] = useState<Record<string, ScorePick>>(emptyMatchScores);
@@ -873,6 +877,7 @@ export function WorldCupPredictor() {
         setIsLeagueCollapsed(parsedPrefs.isLeagueCollapsed ?? true);
         setIsBraggingRightsCollapsed(parsedPrefs.isBraggingRightsCollapsed ?? true);
         setExpandedFamilyPickMatchIds(parsedPrefs.expandedFamilyPickMatchIds ?? {});
+        setShowMissingOnly(Boolean(parsedPrefs.showMissingOnly));
         setShowUpcomingOnly(Boolean(parsedPrefs.showUpcomingOnly));
       } catch {
         // Ignore invalid UI preferences.
@@ -892,6 +897,7 @@ export function WorldCupPredictor() {
             setActiveDateFilter(typeof parsed.activeDateFilter === "string" ? parsed.activeDateFilter : "all");
             setActiveGroupFilter(typeof parsed.activeGroupFilter === "string" ? parsed.activeGroupFilter : "all");
             setActiveTeamFilter(typeof parsed.activeTeamFilter === "string" ? parsed.activeTeamFilter : "all");
+            setShowMissingOnly(Boolean(parsed.showMissingOnly));
             setShowUpcomingOnly(Boolean(parsed.showUpcomingOnly));
             setFiltersCollapsed(Boolean(parsed.filtersCollapsed));
             setResults({
@@ -1048,6 +1054,7 @@ export function WorldCupPredictor() {
       setIsLeagueCollapsed(parsedPrefs.isLeagueCollapsed ?? true);
       setIsBraggingRightsCollapsed(parsedPrefs.isBraggingRightsCollapsed ?? true);
       setExpandedFamilyPickMatchIds(parsedPrefs.expandedFamilyPickMatchIds ?? {});
+      setShowMissingOnly(Boolean(parsedPrefs.showMissingOnly));
       setShowUpcomingOnly(Boolean(parsedPrefs.showUpcomingOnly));
     } catch {
       // Ignore invalid UI preferences.
@@ -1065,10 +1072,11 @@ export function WorldCupPredictor() {
         isLeagueCollapsed,
         isTodayMatchesCollapsed,
         isYesterdayMatchesCollapsed,
+        showMissingOnly,
         showUpcomingOnly
       } satisfies SavedUiPreferences)
     );
-  }, [expandedFamilyPickMatchIds, filtersCollapsed, isBraggingRightsCollapsed, isLeagueCollapsed, isLoaded, isTodayMatchesCollapsed, isYesterdayMatchesCollapsed, showUpcomingOnly]);
+  }, [expandedFamilyPickMatchIds, filtersCollapsed, isBraggingRightsCollapsed, isLeagueCollapsed, isLoaded, isTodayMatchesCollapsed, isYesterdayMatchesCollapsed, showMissingOnly, showUpcomingOnly]);
 
   useEffect(() => {
     if (!isLoaded || isSupabaseConfigured) return;
@@ -1083,10 +1091,11 @@ export function WorldCupPredictor() {
         filtersCollapsed,
         players,
         results,
+        showMissingOnly,
         showUpcomingOnly
       })
     );
-  }, [activeDateFilter, activeGroupFilter, activePlayerId, activeTeamFilter, activeView, filtersCollapsed, isLoaded, players, results, showUpcomingOnly]);
+  }, [activeDateFilter, activeGroupFilter, activePlayerId, activeTeamFilter, activeView, filtersCollapsed, isLoaded, players, results, showMissingOnly, showUpcomingOnly]);
 
   const activePlayer = players.find((player) => player.id === activePlayerId) ?? players[0];
   const visibleFamilyForecasts = useMemo(
@@ -1115,7 +1124,7 @@ export function WorldCupPredictor() {
   const groupStageMatchList = useMemo(() => matches.filter((match) => match.round === "Group stage"), [matches]);
   const knockoutMatchList = useMemo(() => matches.filter((match) => match.round !== "Group stage"), [matches]);
   const filteredMatches = useMemo(() => {
-    const nextMatches = sortMatchesByKickoff(groupStageMatchList).filter((match) => {
+    let nextMatches = sortMatchesByKickoff(groupStageMatchList).filter((match) => {
       const matchesTeam =
         activeTeamFilter === "all" || match.homeTeam.code === activeTeamFilter || match.awayTeam.code === activeTeamFilter;
       const matchesGroup = activeGroupFilter === "all" || match.groupId === activeGroupFilter;
@@ -1124,15 +1133,23 @@ export function WorldCupPredictor() {
       return matchesTeam && matchesGroup && matchesDate;
     });
 
-    if (!showUpcomingOnly) return nextMatches;
-    return nextMatches.filter(isUpcomingMatch).slice(0, NEXT_UPCOMING_MATCH_COUNT);
-  }, [activeDateFilter, activeGroupFilter, activeTeamFilter, groupStageMatchList, showUpcomingOnly]);
-  const filteredKnockoutMatches = useMemo(() => {
-    const nextMatches = sortMatchesByKickoff(knockoutMatchList);
+    if (showMissingOnly) {
+      nextMatches = nextMatches.filter((match) => !hasScore(activePlayer?.matchPredictions[match.id]) && !isPredictionLocked(match));
+    }
 
     if (!showUpcomingOnly) return nextMatches;
     return nextMatches.filter(isUpcomingMatch).slice(0, NEXT_UPCOMING_MATCH_COUNT);
-  }, [knockoutMatchList, showUpcomingOnly]);
+  }, [activeDateFilter, activeGroupFilter, activePlayer, activeTeamFilter, groupStageMatchList, showMissingOnly, showUpcomingOnly]);
+  const filteredKnockoutMatches = useMemo(() => {
+    let nextMatches = sortMatchesByKickoff(knockoutMatchList);
+
+    if (showMissingOnly) {
+      nextMatches = nextMatches.filter((match) => !hasScore(activePlayer?.matchPredictions[match.id]) && !isPredictionLocked(match));
+    }
+
+    if (!showUpcomingOnly) return nextMatches;
+    return nextMatches.filter(isUpcomingMatch).slice(0, NEXT_UPCOMING_MATCH_COUNT);
+  }, [activePlayer, knockoutMatchList, showMissingOnly, showUpcomingOnly]);
   const knockoutMatchesByRound = useMemo(
     () =>
       knockoutRounds
@@ -1456,6 +1473,7 @@ export function WorldCupPredictor() {
     setActiveGroupFilter("all");
     setActiveTeamFilter("all");
     setShowUpcomingOnly(false);
+    setShowMissingOnly(false);
     setFiltersCollapsed(false);
     setResults(emptyMatchScores());
   };
@@ -1666,16 +1684,18 @@ export function WorldCupPredictor() {
           <small className="match-kickoff">{formatKickoff(match)}</small>
           <small className="match-venue">{match.venue && match.city ? `${match.venue}, ${match.city}` : match.city || match.venue}</small>
           {hasOdds(match) ? <small className="match-odds">{oddsCopy(match)}</small> : null}
-          <small className={revealed ? "match-lock open" : locked ? "match-lock locked" : "match-lock"}>
-            {statusCopy.summary}
-          </small>
-          {showDetailedPrivacy ? <small className="privacy-note">{statusCopy.detail}</small> : null}
-          {showDetailedPrivacy && !revealed && isSupabaseConfigured ? (
+          {!completed ? (
+            <small className={revealed ? "match-lock open" : locked ? "match-lock locked" : "match-lock"}>
+              {statusCopy.summary}
+            </small>
+          ) : null}
+          {showDetailedPrivacy && !completed ? <small className="privacy-note">{statusCopy.detail}</small> : null}
+          {showDetailedPrivacy && !completed && !revealed && isSupabaseConfigured ? (
             <small className="privacy-note">Other players' exact scores stay private until kickoff.</small>
           ) : null}
         </div>
         {completed ? (
-          <ActualScoreDisplay match={match} score={actualScore} scorers={matchScorersForMatch(match.id)} />
+          <ActualScoreDisplay match={match} points={points} score={actualScore} scorers={matchScorersForMatch(match.id)} />
         ) : (
           <>
             <ScoreInputs
@@ -1696,7 +1716,7 @@ export function WorldCupPredictor() {
             />
           </>
         )}
-        <strong className={`match-points ${points === 3 ? "exact" : points === 1 ? "outcome" : ""}`}>{points}</strong>
+        {!completed ? <strong className={`match-points ${points === 3 ? "exact" : points === 1 ? "outcome" : ""}`}>{points}</strong> : null}
         {revealed ? renderRevealedPicks(match) : null}
       </article>
     );
@@ -1977,7 +1997,7 @@ export function WorldCupPredictor() {
                 </span>
               </div>
 
-              <div className="view-tabs" aria-label="Choose match view">
+              <div className="view-tabs match-view-tabs" aria-label="Choose match view">
                 <button className={activeView === "group" ? "active" : ""} onClick={() => setActiveView("group")} type="button">
                   Group view
                 </button>
@@ -2039,6 +2059,10 @@ export function WorldCupPredictor() {
                       <label>
                         <input checked={showUpcomingOnly} onChange={(event) => setShowUpcomingOnly(event.target.checked)} type="checkbox" />
                         <span>Next {NEXT_UPCOMING_MATCH_COUNT} upcoming games</span>
+                      </label>
+                      <label>
+                        <input checked={showMissingOnly} onChange={(event) => setShowMissingOnly(event.target.checked)} type="checkbox" />
+                        <span>Games I still need to pick</span>
                       </label>
                     </div>
                   </div>
@@ -2112,6 +2136,10 @@ export function WorldCupPredictor() {
                     <label>
                       <input checked={showUpcomingOnly} onChange={(event) => setShowUpcomingOnly(event.target.checked)} type="checkbox" />
                       <span>Next {NEXT_UPCOMING_MATCH_COUNT} upcoming games</span>
+                    </label>
+                    <label>
+                      <input checked={showMissingOnly} onChange={(event) => setShowMissingOnly(event.target.checked)} type="checkbox" />
+                      <span>Games I still need to pick</span>
                     </label>
                   </div>
                   <p className="filter-summary">

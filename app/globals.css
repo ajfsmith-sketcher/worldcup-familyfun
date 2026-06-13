@@ -1549,6 +1549,17 @@ h2 {
     flex-basis: 100%;
   }
 
+  .match-view-tabs {
+    flex-wrap: nowrap;
+  }
+
+  .match-view-tabs button {
+    flex: 1 1 0;
+    min-height: 38px;
+    min-width: 0;
+    padding: 0 8px;
+  }
+
   .workspace-tabs {
     flex-wrap: nowrap;
     gap: 6px;
@@ -1614,6 +1625,39 @@ h2 {
 }
 
 @media (max-width: 520px) and (orientation: portrait) {
+  .group-table {
+    overflow-x: visible;
+  }
+
+  .group-table-head,
+  .group-table-row {
+    gap: 6px;
+    grid-template-columns: minmax(0, 1fr) 34px 40px 42px;
+    min-width: 0;
+    padding: 8px;
+  }
+
+  .group-table-head span:nth-child(2),
+  .group-table-head span:nth-child(4),
+  .group-table-head span:nth-child(5),
+  .group-table-head span:nth-child(6),
+  .group-table-row span:nth-child(2),
+  .group-table-row span:nth-child(4),
+  .group-table-row span:nth-child(5),
+  .group-table-row span:nth-child(6) {
+    display: none;
+  }
+
+  .group-table-head,
+  .group-table-row {
+    font-size: 0.78rem;
+  }
+
+  .group-table-row span:first-child {
+    min-width: 0;
+    overflow-wrap: anywhere;
+  }
+
   .family-standings-scroll {
     overflow-x: visible;
   }
