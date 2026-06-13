@@ -9,6 +9,18 @@
   "crons": [
     {
       "path": "/api/sync-scores",
+      "schedule": "15 21 * * *"
+    },
+    {
+      "path": "/api/sync-scores",
+      "schedule": "15 0 * * *"
+    },
+    {
+      "path": "/api/sync-scores",
+      "schedule": "15 3 * * *"
+    },
+    {
+      "path": "/api/sync-scores",
       "schedule": "50 5 * * *"
     },
     {
