@@ -166,10 +166,12 @@ type SavedState = {
 };
 
 type SavedUiPreferences = {
+  expandedFamilyPickMatchIds?: Record<string, boolean>;
   filtersCollapsed?: boolean;
   isBraggingRightsCollapsed?: boolean;
   isLeagueCollapsed?: boolean;
   isTodayMatchesCollapsed?: boolean;
+  isYesterdayMatchesCollapsed?: boolean;
   showUpcomingOnly?: boolean;
 };
 
@@ -732,9 +734,11 @@ export function WorldCupPredictor() {
   const [isInfoOpen, setIsInfoOpen] = useState(false);
   const [isSettingsOpen, setIsSettingsOpen] = useState(false);
   const [isTableKeyOpen, setIsTableKeyOpen] = useState(false);
-  const [isTodayMatchesCollapsed, setIsTodayMatchesCollapsed] = useState(false);
-  const [isLeagueCollapsed, setIsLeagueCollapsed] = useState(false);
-  const [isBraggingRightsCollapsed, setIsBraggingRightsCollapsed] = useState(false);
+  const [isTodayMatchesCollapsed, setIsTodayMatchesCollapsed] = useState(true);
+  const [isYesterdayMatchesCollapsed, setIsYesterdayMatchesCollapsed] = useState(true);
+  const [isLeagueCollapsed, setIsLeagueCollapsed] = useState(true);
+  const [isBraggingRightsCollapsed, setIsBraggingRightsCollapsed] = useState(true);
+  const [expandedFamilyPickMatchIds, setExpandedFamilyPickMatchIds] = useState<Record<string, boolean>>({});
   const [profileReady, setProfileReady] = useState(!isSupabaseConfigured);
 
   const isAdmin = session?.user.app_metadata?.role === "admin";
@@ -745,9 +749,11 @@ export function WorldCupPredictor() {
       try {
         const parsedPrefs = JSON.parse(savedPrefs) as SavedUiPreferences;
         setFiltersCollapsed(Boolean(parsedPrefs.filtersCollapsed));
-        setIsTodayMatchesCollapsed(Boolean(parsedPrefs.isTodayMatchesCollapsed));
-        setIsLeagueCollapsed(Boolean(parsedPrefs.isLeagueCollapsed));
-        setIsBraggingRightsCollapsed(Boolean(parsedPrefs.isBraggingRightsCollapsed));
+        setIsTodayMatchesCollapsed(parsedPrefs.isTodayMatchesCollapsed ?? true);
+        setIsYesterdayMatchesCollapsed(parsedPrefs.isYesterdayMatchesCollapsed ?? true);
+        setIsLeagueCollapsed(parsedPrefs.isLeagueCollapsed ?? true);
+        setIsBraggingRightsCollapsed(parsedPrefs.isBraggingRightsCollapsed ?? true);
+        setExpandedFamilyPickMatchIds(parsedPrefs.expandedFamilyPickMatchIds ?? {});
         setShowUpcomingOnly(Boolean(parsedPrefs.showUpcomingOnly));
       } catch {
         // Ignore invalid UI preferences.
@@ -918,9 +924,11 @@ export function WorldCupPredictor() {
     try {
       const parsedPrefs = JSON.parse(savedPrefs) as SavedUiPreferences;
       setFiltersCollapsed(Boolean(parsedPrefs.filtersCollapsed));
-      setIsTodayMatchesCollapsed(Boolean(parsedPrefs.isTodayMatchesCollapsed));
-      setIsLeagueCollapsed(Boolean(parsedPrefs.isLeagueCollapsed));
-      setIsBraggingRightsCollapsed(Boolean(parsedPrefs.isBraggingRightsCollapsed));
+      setIsTodayMatchesCollapsed(parsedPrefs.isTodayMatchesCollapsed ?? true);
+      setIsYesterdayMatchesCollapsed(parsedPrefs.isYesterdayMatchesCollapsed ?? true);
+      setIsLeagueCollapsed(parsedPrefs.isLeagueCollapsed ?? true);
+      setIsBraggingRightsCollapsed(parsedPrefs.isBraggingRightsCollapsed ?? true);
+      setExpandedFamilyPickMatchIds(parsedPrefs.expandedFamilyPickMatchIds ?? {});
       setShowUpcomingOnly(Boolean(parsedPrefs.showUpcomingOnly));
     } catch {
       // Ignore invalid UI preferences.
@@ -933,13 +941,15 @@ export function WorldCupPredictor() {
       UI_PREFS_KEY,
       JSON.stringify({
         filtersCollapsed,
+        expandedFamilyPickMatchIds,
         isBraggingRightsCollapsed,
         isLeagueCollapsed,
         isTodayMatchesCollapsed,
+        isYesterdayMatchesCollapsed,
         showUpcomingOnly
       } satisfies SavedUiPreferences)
     );
-  }, [filtersCollapsed, isBraggingRightsCollapsed, isLeagueCollapsed, isLoaded, isTodayMatchesCollapsed, showUpcomingOnly]);
+  }, [expandedFamilyPickMatchIds, filtersCollapsed, isBraggingRightsCollapsed, isLeagueCollapsed, isLoaded, isTodayMatchesCollapsed, isYesterdayMatchesCollapsed, showUpcomingOnly]);
 
   useEffect(() => {
     if (!isLoaded || isSupabaseConfigured) return;
@@ -1022,6 +1032,11 @@ export function WorldCupPredictor() {
   const familyFeaturedMatches = useMemo(() => {
     const todayUsKey = matchDateKeyInTimeZone(new Date().toISOString());
     return sortMatchesByKickoff(matches).filter((match) => match.kickoffAt && matchDateKeyInTimeZone(match.kickoffAt) === todayUsKey);
+  }, [matches]);
+  const familyYesterdayMatches = useMemo(() => {
+    const yesterday = new Date(Date.now() - 24 * 60 * 60 * 1000);
+    const yesterdayUsKey = matchDateKeyInTimeZone(yesterday.toISOString());
+    return sortMatchesByKickoff(matches).filter((match) => match.kickoffAt && matchDateKeyInTimeZone(match.kickoffAt) === yesterdayUsKey);
   }, [matches]);
   const visibleGroups = worldCupGroups.filter((group) => filteredMatches.some((match) => match.groupId === group.id));
   const resultCount = completedCount(results, matches);
@@ -1381,29 +1396,67 @@ export function WorldCupPredictor() {
   const renderRevealedPicks = (match: MatchWithState) => {
     const actualScore = normalizeScore(results[match.id]);
     const revealedPicks = revealedPicksForMatch(match);
+    const activePick = activePlayer ? normalizeScore(activePlayer.matchPredictions[match.id]) : emptyScore();
+    const expanded = Boolean(expandedFamilyPickMatchIds[match.id]);
 
     return (
       <div className="revealed-picks">
-        <strong>Family picks</strong>
-        {revealedPicks.length > 0 ? (
-          <div>
-            {revealedPicks.map((pick) => (
-              <span key={pick.id}>
-                {pick.name}: {pick.score.home}-{pick.score.away}
-                {hasScore(actualScore) ? ` (${pick.points} pts)` : ""}
-              </span>
-            ))}
-          </div>
-        ) : (
-          <span>No saved picks for this match.</span>
-        )}
+        <div className="revealed-picks-heading">
+          <strong>Family picks</strong>
+          <button className="text-button" onClick={() => setExpandedFamilyPickMatchIds((current) => ({ ...current, [match.id]: !expanded }))} type="button">
+            {expanded ? "Hide" : "Show"}
+          </button>
+        </div>
+        {expanded ? (
+          <>
+            {hasScore(activePick) ? (
+              <div className="your-pick-summary">
+                <strong>Your pick</strong>
+                <span>
+                  {activePick.home}-{activePick.away}
+                  {hasScore(actualScore) ? ` · ${matchPoints(activePick, actualScore)} pts` : ""}
+                </span>
+              </div>
+            ) : null}
+            {revealedPicks.length > 0 ? (
+              <div>
+                {revealedPicks.map((pick) => (
+                  <span key={pick.id}>
+                    {pick.name}: {pick.score.home}-{pick.score.away}
+                    {hasScore(actualScore) ? ` (${pick.points} pts)` : ""}
+                  </span>
+                ))}
+              </div>
+            ) : (
+              <span>No saved picks for this match.</span>
+            )}
+          </>
+        ) : null}
       </div>
     );
   };
 
+  const completedPredictionRowsForPlayer = (player: Player) =>
+    sortMatchesByKickoff(scoredMatches)
+      .map((match) => {
+        const prediction = normalizeScore(player.matchPredictions[match.id]);
+        const actualScore = normalizeScore(results[match.id]);
+        if (!hasScore(prediction) || !hasScore(actualScore)) return null;
+        return {
+          actualScore,
+          match,
+          points: matchPoints(prediction, actualScore),
+          prediction
+        };
+      })
+      .filter((row): row is { actualScore: ScorePick; match: MatchWithState; points: number; prediction: ScorePick } => Boolean(row));
+
   const renderNextMatchCard = (match: MatchWithState) => {
     const forecast = visibleFamilyForecasts[match.id];
     const revealed = arePredictionsRevealed(match);
+    const actualScore = normalizeScore(results[match.id]);
+    const activePick = normalizeScore(activePlayer?.matchPredictions[match.id]);
+    const completed = hasScore(actualScore);
 
     return (
       <article className="next-match-card" key={match.id}>
@@ -1423,6 +1476,15 @@ export function WorldCupPredictor() {
           <small className="privacy-note">{predictionStatusCopy(match).detail}</small>
           {hasOdds(match) ? <small className="match-odds">{oddsCopy(match)}</small> : null}
         </div>
+        {completed ? (
+          <div className="completed-match-summary">
+            <strong>Actual score</strong>
+            <span>
+              {actualScore.home}-{actualScore.away}
+              {hasScore(activePick) ? ` · ${matchPoints(activePick, actualScore)} pts` : ""}
+            </span>
+          </div>
+        ) : null}
         <div className="family-forecast">
           <strong>Family forecast</strong>
           {forecast ? (
@@ -1463,6 +1525,7 @@ export function WorldCupPredictor() {
     const locked = isPredictionLocked(match);
     const lockWarning = isPredictionLockWarning(match);
     const revealed = arePredictionsRevealed(match);
+    const completed = hasScore(actualScore);
     const canEditPrediction = !locked;
     const needsPick = !hasScore(predictedScore) && !locked;
     const priorityPick = isPriorityPick(match, predictedScore);
@@ -1495,22 +1558,33 @@ export function WorldCupPredictor() {
             <small className="privacy-note">Other players' exact scores stay private until kickoff.</small>
           ) : null}
         </div>
-        <ScoreInputs
-          disabled={!canEditPrediction}
-          label={`${activePlayer?.name ?? "Player"}'s prediction for ${match.label}`}
-          match={match}
-          onChange={(score) => updateActiveMatchScore(match.id, score)}
-          saveStatus={predictionStatus}
-          score={predictedScore}
-          urgencyStatus={locked ? "locked" : lockWarning ? "warning" : "idle"}
-        />
-        <ScoreInputs
-          disabled={isSupabaseConfigured && !isAdmin}
-          label={`Actual score for ${match.label}`}
-          match={match}
-          onChange={(score) => updateResultScore(match.id, score)}
-          score={actualScore}
-        />
+        {completed ? (
+          <div className="completed-match-summary">
+            <strong>Actual score</strong>
+            <span>
+              {actualScore.home}-{actualScore.away}
+            </span>
+          </div>
+        ) : (
+          <>
+            <ScoreInputs
+              disabled={!canEditPrediction}
+              label={`${activePlayer?.name ?? "Player"}'s prediction for ${match.label}`}
+              match={match}
+              onChange={(score) => updateActiveMatchScore(match.id, score)}
+              saveStatus={predictionStatus}
+              score={predictedScore}
+              urgencyStatus={locked ? "locked" : lockWarning ? "warning" : "idle"}
+            />
+            <ScoreInputs
+              disabled={isSupabaseConfigured && !isAdmin}
+              label={`Actual score for ${match.label}`}
+              match={match}
+              onChange={(score) => updateResultScore(match.id, score)}
+              score={actualScore}
+            />
+          </>
+        )}
         <strong className={`match-points ${points === 3 ? "exact" : points === 1 ? "outcome" : ""}`}>{points}</strong>
         {revealed ? renderRevealedPicks(match) : null}
       </article>
@@ -1981,6 +2055,21 @@ export function WorldCupPredictor() {
                   </section>
                 ) : null}
 
+                {familyYesterdayMatches.length > 0 ? (
+                  <section className="family-section-card">
+                    <div className="family-section-heading">
+                      <div>
+                        <p className="eyebrow">Yesterday</p>
+                        <h3>Yesterday&apos;s games</h3>
+                      </div>
+                      <button className="icon-text-button" onClick={() => setIsYesterdayMatchesCollapsed((current) => !current)} type="button">
+                        {isYesterdayMatchesCollapsed ? "+" : "-"}
+                      </button>
+                    </div>
+                    {!isYesterdayMatchesCollapsed ? <div className="next-match-list">{familyYesterdayMatches.map(renderNextMatchCard)}</div> : null}
+                  </section>
+                ) : null}
+
                 <section className="family-section-card">
                   <div className="family-section-heading">
                     <div>
@@ -1998,45 +2087,82 @@ export function WorldCupPredictor() {
                   </div>
 
                   {!isLeagueCollapsed ? (
-                    <div className="family-standings-scroll">
-                      <table className="family-standings-table">
-                        <thead>
-                          <tr>
-                            <th>#</th>
-                            <th>Move</th>
-                            <th>Player</th>
-                            <th>GP</th>
-                            <th>GC</th>
-                            <th>GI</th>
-                            <th>RC</th>
-                            <th>EX</th>
-                            <th>Pts</th>
-                          </tr>
-                        </thead>
-                        <tbody>
-                          {standings.map((player, index) => (
-                            <tr className={player.hasNextPending ? "needs-pick" : ""} key={player.id}>
-                              <td data-label="Rank">{index + 1}</td>
-                              <td data-label="Move">{renderMovement(player.movement)}</td>
-                              <td data-label="Player">
-                                <strong>{player.name}</strong>
-                                {player.hasNextPending ? (
-                                  <small>Missing next {player.nextPendingCount === 1 ? "match" : `${player.nextPendingCount} matches`}</small>
-                                ) : null}
-                              </td>
-                              <td data-label="Games played">{player.gamesPlayed}</td>
-                              <td data-label="Goals correct">{player.goalsCorrect}</td>
-                              <td data-label="Goals incorrect">{player.goalsIncorrect}</td>
-                              <td data-label="Results correct">{player.resultCorrect}</td>
-                              <td data-label="Exact scores">{player.exactScores}</td>
-                              <td data-label="Points">
-                                <b>{player.score}</b>
-                              </td>
+                    <>
+                      <div className="family-standings-scroll">
+                        <table className="family-standings-table">
+                          <thead>
+                            <tr>
+                              <th>#</th>
+                              <th>Move</th>
+                              <th>Player</th>
+                              <th>GP</th>
+                              <th>GC</th>
+                              <th>GI</th>
+                              <th>RC</th>
+                              <th>EX</th>
+                              <th>Pts</th>
                             </tr>
-                          ))}
-                        </tbody>
-                      </table>
-                    </div>
+                          </thead>
+                          <tbody>
+                            {standings.map((player, index) => (
+                              <tr className={player.hasNextPending ? "needs-pick" : ""} key={player.id}>
+                                <td data-label="Rank">{index + 1}</td>
+                                <td data-label="Move">{renderMovement(player.movement)}</td>
+                                <td data-label="Player">
+                                  <strong>{player.name}</strong>
+                                  {player.hasNextPending ? (
+                                    <small>Missing next {player.nextPendingCount === 1 ? "match" : `${player.nextPendingCount} matches`}</small>
+                                  ) : null}
+                                </td>
+                                <td data-label="Games played">{player.gamesPlayed}</td>
+                                <td data-label="Goals correct">{player.goalsCorrect}</td>
+                                <td data-label="Goals incorrect">{player.goalsIncorrect}</td>
+                                <td data-label="Results correct">{player.resultCorrect}</td>
+                                <td data-label="Exact scores">{player.exactScores}</td>
+                                <td data-label="Points">
+                                  <b>{player.score}</b>
+                                </td>
+                              </tr>
+                            ))}
+                          </tbody>
+                        </table>
+                      </div>
+                      <div className="player-prediction-history">
+                        {standings.map((player, index) => {
+                          const completedRows = completedPredictionRowsForPlayer(player);
+                          return (
+                            <details key={player.id}>
+                              <summary>
+                                <span>
+                                  {index + 1}. {player.name}
+                                </span>
+                                <strong>{completedRows.length} completed</strong>
+                              </summary>
+                              {completedRows.length > 0 ? (
+                                <ol>
+                                  {completedRows.map(({ actualScore, match, points, prediction }) => (
+                                    <li key={match.id}>
+                                      <span>
+                                        {match.homeTeam.name} v {match.awayTeam.name}
+                                      </span>
+                                      <span>
+                                        Pick {prediction.home}-{prediction.away}
+                                      </span>
+                                      <span>
+                                        Actual {actualScore.home}-{actualScore.away}
+                                      </span>
+                                      <strong>{points} pts</strong>
+                                    </li>
+                                  ))}
+                                </ol>
+                              ) : (
+                                <p className="muted-copy">No completed predictions yet.</p>
+                              )}
+                            </details>
+                          );
+                        })}
+                      </div>
+                    </>
                   ) : null}
                 </section>
 

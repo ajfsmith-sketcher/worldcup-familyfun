@@ -504,7 +504,8 @@ h2 {
 }
 
 .family-forecast,
-.fun-fact {
+.fun-fact,
+.completed-match-summary {
   background: #fff;
   border: 1px solid var(--line);
   border-radius: 8px;
@@ -513,10 +514,16 @@ h2 {
 }
 
 .family-forecast strong,
-.fun-fact strong {
+.fun-fact strong,
+.completed-match-summary strong {
   color: var(--accent-strong);
   font-size: 0.78rem;
   text-transform: uppercase;
+}
+
+.completed-match-summary span {
+  color: var(--ink);
+  font-weight: 900;
 }
 
 .family-forecast small {
@@ -1015,10 +1022,38 @@ h2 {
   padding: 10px;
 }
 
-.revealed-picks > div {
+.revealed-picks > div:not(.revealed-picks-heading):not(.your-pick-summary) {
   display: flex;
   flex-wrap: wrap;
   gap: 8px;
+}
+
+.revealed-picks-heading {
+  align-items: center;
+  display: flex;
+  justify-content: space-between;
+  gap: 10px;
+}
+
+.revealed-picks-heading strong {
+  color: var(--accent-strong);
+  font-size: 0.78rem;
+  text-transform: uppercase;
+}
+
+.your-pick-summary {
+  background: var(--surface-muted);
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  display: grid;
+  gap: 4px;
+  padding: 10px;
+}
+
+.your-pick-summary strong {
+  color: var(--accent-strong);
+  font-size: 0.72rem;
+  text-transform: uppercase;
 }
 
 .revealed-picks span {
@@ -1190,6 +1225,68 @@ h2 {
 
 .family-standings-table b {
   font-size: 1.1rem;
+}
+
+.player-prediction-history {
+  display: grid;
+  gap: 8px;
+  margin-top: 12px;
+}
+
+.player-prediction-history details {
+  background: var(--surface-muted);
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  padding: 10px;
+}
+
+.player-prediction-history summary {
+  align-items: center;
+  cursor: pointer;
+  display: flex;
+  gap: 10px;
+  justify-content: space-between;
+}
+
+.player-prediction-history summary span,
+.player-prediction-history summary strong {
+  font-weight: 900;
+  overflow-wrap: anywhere;
+}
+
+.player-prediction-history summary strong {
+  color: var(--accent-strong);
+  font-size: 0.82rem;
+}
+
+.player-prediction-history ol {
+  display: grid;
+  gap: 6px;
+  margin: 10px 0 0;
+  padding-left: 20px;
+}
+
+.player-prediction-history li {
+  align-items: center;
+  gap: 8px;
+  display: grid;
+  grid-template-columns: minmax(0, 1.4fr) auto auto auto;
+}
+
+.player-prediction-history li span {
+  color: var(--muted);
+  font-size: 0.84rem;
+  font-weight: 800;
+}
+
+.player-prediction-history li span:first-child {
+  color: var(--ink);
+}
+
+.player-prediction-history li strong {
+  color: var(--accent-strong);
+  font-size: 0.84rem;
+  text-align: right;
 }
 
 .standing-move {
@@ -1397,6 +1494,20 @@ h2 {
 
   .scorers-table-row b {
     font-size: 1rem;
+  }
+
+  .player-prediction-history li {
+    align-items: start;
+    grid-template-columns: 1fr;
+  }
+
+  .player-prediction-history li strong {
+    text-align: left;
+  }
+
+  .revealed-picks span {
+    border-radius: 8px;
+    width: 100%;
   }
 }
 
