@@ -33,6 +33,7 @@ import {
 
 type ViewMode = "group" | "date";
 type GroupDisplayMode = "all" | "hide-games" | "hide-tables";
+type HistoryPointFilter = "-" | "all" | "0" | "1" | "2" | "3";
 type WorkspaceTab = "groups" | "knockouts" | "scorers" | "family" | "admin";
 type DateFilter = "all" | "today" | string;
 type GroupFilter = "all" | GroupId;
@@ -883,6 +884,7 @@ export function WorldCupPredictor() {
   const [isBraggingRightsCollapsed, setIsBraggingRightsCollapsed] = useState(true);
   const [expandedFamilyPickMatchIds, setExpandedFamilyPickMatchIds] = useState<Record<string, boolean>>({});
   const [selectedHistoryPlayerId, setSelectedHistoryPlayerId] = useState<string | null>(null);
+  const [historyPointFilter, setHistoryPointFilter] = useState<HistoryPointFilter>("all");
   const [profileReady, setProfileReady] = useState(!isSupabaseConfigured);
 
   const isAdmin = session?.user.app_metadata?.role === "admin";
@@ -1644,20 +1646,25 @@ export function WorldCupPredictor() {
       .map((match) => {
         const prediction = normalizeScore(player.matchPredictions[match.id]);
         const actualScore = normalizeScore(results[match.id]);
-        if (!hasScore(prediction) || !hasScore(actualScore)) return null;
+        if (!hasScore(actualScore)) return null;
+        const points = hasScore(prediction) ? matchPoints(prediction, actualScore) : null;
         return {
           actualScore,
           match,
-          points: matchPoints(prediction, actualScore),
+          points,
           prediction
         };
       })
-      .filter((row): row is { actualScore: ScorePick; match: MatchWithState; points: number; prediction: ScorePick } => Boolean(row));
+      .filter((row): row is { actualScore: ScorePick; match: MatchWithState; points: number | null; prediction: ScorePick } => Boolean(row));
 
   const matchScorersForMatch = (_matchId: string): MatchScorerRow[] => [];
 
   const selectedHistoryPlayer = selectedHistoryPlayerId ? standings.find((player) => player.id === selectedHistoryPlayerId) : undefined;
-  const selectedHistoryRows = selectedHistoryPlayer ? completedPredictionRowsForPlayer(selectedHistoryPlayer) : [];
+  const selectedHistoryRows = selectedHistoryPlayer
+    ? completedPredictionRowsForPlayer(selectedHistoryPlayer).filter((row) =>
+        historyPointFilter === "all" ? true : historyPointFilter === "-" ? row.points === null : row.points === Number(historyPointFilter)
+      )
+    : [];
 
   const renderNextMatchCard = (match: MatchWithState) => {
     const forecast = visibleFamilyForecasts[match.id];
@@ -1836,7 +1843,7 @@ export function WorldCupPredictor() {
         <div className="predictor-hero-copy">
           <p className="eyebrow">Family World Cup pool</p>
           <div className="hero-title-row">
-            <h1>World Cup 2026 predictor</h1>
+            <h1>World Cup 2026</h1>
             <div className="hero-icon-actions">
               <button aria-label="Show game rules" className="hero-info-button" onClick={() => setIsInfoOpen(true)} type="button">
                 i
@@ -1903,6 +1910,13 @@ export function WorldCupPredictor() {
             <div className="settings-list">
               <strong>{session?.user.email}</strong>
               <span>Shared Supabase game</span>
+              <label className="settings-field">
+                <span>Display name</span>
+                <input aria-label="Display name" onChange={(event) => setProfileName(event.target.value)} value={profileName} />
+              </label>
+              <button className="text-button" onClick={saveProfile} type="button">
+                Save name
+              </button>
               <label className="inline-check compact-check">
                 <input checked={dailyDigestOptIn} onChange={(event) => saveDailyDigestPreference(event.target.checked)} type="checkbox" />
                 <span>7am digest</span>
@@ -1956,6 +1970,13 @@ export function WorldCupPredictor() {
                 ×
               </button>
             </div>
+            <div className="player-history-controls" aria-label="Filter completed picks by points">
+              {(["all", "3", "2", "1", "0", "-"] as HistoryPointFilter[]).map((filter) => (
+                <button className={historyPointFilter === filter ? "active" : ""} key={filter} onClick={() => setHistoryPointFilter(filter)} type="button">
+                  {filter === "all" ? "All" : filter === "-" ? "-" : `${filter} pts`}
+                </button>
+              ))}
+            </div>
             {selectedHistoryRows.length > 0 ? (
               <ol className="player-prediction-history">
                 {selectedHistoryRows.map(({ actualScore, match, points, prediction }) => (
@@ -1964,17 +1985,17 @@ export function WorldCupPredictor() {
                       {match.homeTeam.code} v {match.awayTeam.code}
                     </span>
                     <span>
-                      Pick {prediction.home}-{prediction.away}
-                    </span>
-                    <span>
                       Actual {actualScore.home}-{actualScore.away}
                     </span>
-                    <strong>{points} pts</strong>
+                    <span>
+                      Pick {hasScore(prediction) ? `${prediction.home}-${prediction.away}` : "-"}
+                    </span>
+                    <strong>{points === null ? "-" : `${points} pts`}</strong>
                   </li>
                 ))}
               </ol>
             ) : (
-              <p className="muted-copy">No completed predictions yet.</p>
+              <p className="muted-copy">No completed predictions for this filter.</p>
             )}
           </div>
         </div>
