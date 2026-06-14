@@ -624,7 +624,7 @@ h2 {
   padding: 12px;
 }
 
-.next-match-card div {
+.next-match-card > div:not([class]) {
   display: grid;
   gap: 4px;
   min-width: 0;
@@ -650,6 +650,12 @@ h2 {
   border-radius: 8px;
   grid-column: 1 / -1;
   padding: 10px;
+}
+
+.family-forecast,
+.fun-fact {
+  display: grid;
+  gap: 4px;
 }
 
 .family-forecast strong,
