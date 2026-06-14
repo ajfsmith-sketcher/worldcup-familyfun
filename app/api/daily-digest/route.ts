@@ -41,6 +41,7 @@ type LeaderboardRow = {
   gamesPlayed: number;
   goalsCorrect: number;
   goalsIncorrect: number;
+  missedPicks: number;
   movement: number;
   name: string;
   playerId: string;
@@ -64,11 +65,12 @@ const htmlEscape = (value: string | number | null | undefined) =>
     .replace(/"/g, "&quot;");
 
 const DIGEST_HOUR_UTC = 6;
+const DIGEST_MINUTE_UTC = 30;
 const ONE_DAY_MS = 24 * 60 * 60 * 1000;
 
 const latestDigestEnd = (now = new Date()) => {
   const end = new Date(now);
-  end.setUTCHours(DIGEST_HOUR_UTC, 0, 0, 0);
+  end.setUTCHours(DIGEST_HOUR_UTC, DIGEST_MINUTE_UTC, 0, 0);
   if (end.getTime() > now.getTime()) {
     end.setUTCDate(end.getUTCDate() - 1);
   }
@@ -120,27 +122,80 @@ const scoreFromMatch = (match: MatchRow): Score | undefined =>
 
 const scoreLabel = (score: Score | undefined) => (score ? `${score.home}-${score.away}` : "-");
 
+const winningTeamName = (match: MatchRow) => {
+  const score = scoreFromMatch(match);
+  if (!score || score.home === score.away) return undefined;
+  return score.home > score.away ? match.home_name : match.away_name;
+};
+
+const margin = (match: MatchRow) => {
+  const score = scoreFromMatch(match);
+  return score ? Math.abs(score.home - score.away) : 0;
+};
+
+const randomFrom = (items: string[], seed: number) => items[Math.abs(seed) % items.length] ?? "";
+
 const buildSummary = ({
   leaderboard,
+  previousLeaderboard,
   windowMatches
 }: {
   leaderboard: LeaderboardRow[];
+  previousLeaderboard: LeaderboardRow[];
   windowMatches: MatchRow[];
 }) => {
   const leader = leaderboard[0];
+  const previousLeader = previousLeaderboard[0];
+  const climber = leaderboard
+    .filter((player) => player.movement > 0)
+    .sort((left, right) => right.movement - left.movement || right.points - left.points)[0];
+  const encouragement = [...leaderboard].sort(
+    (left, right) => right.missedPicks - left.missedPicks || left.points - right.points || left.name.localeCompare(right.name)
+  )[0];
   const scoredInWindow = windowMatches.filter((match) => scoreFromMatch(match)).length;
   const finishedWithoutScores = windowMatches.filter((match) => match.score_status === "FINISHED" && !scoreFromMatch(match)).length;
-  const leaderCopy = leader ? `${leader.name} is setting the pace on ${leader.points} points` : "The leaderboard is still limbering up";
+  const scotlandWin = windowMatches.find((match) => (match.home_code === "SCO" || match.away_code === "SCO") && winningTeamName(match) === "Scotland");
+  const biggestWin = [...windowMatches].filter(scoreFromMatch).sort((left, right) => margin(right) - margin(left))[0];
+  const seed = windowMatches.reduce((total, match) => total + (match.match_number ?? 0), leaderboard.length + scoredInWindow);
+  const leaderCopy = leader
+    ? previousLeader && previousLeader.playerId !== leader.playerId
+      ? `${leader.name} has pinched top spot with ${leader.points} points`
+      : randomFrom(
+          [
+            `${leader.name} is still wearing the imaginary yellow jersey on ${leader.points} points`,
+            `${leader.name} is setting the pace on ${leader.points} points`,
+            `${leader.name} remains the person everyone is pretending not to worry about on ${leader.points} points`
+          ],
+          seed
+        )
+    : "The leaderboard is still limbering up";
   const resultCopy =
     scoredInWindow > 0
-      ? `${scoredInWindow} result${scoredInWindow === 1 ? "" : "s"} landed since the last digest.`
+      ? randomFrom(
+          [
+            `${scoredInWindow} result${scoredInWindow === 1 ? "" : "s"} landed since the last digest.`,
+            `${scoredInWindow} match${scoredInWindow === 1 ? "" : "es"} moved the table around.`,
+            `The predictor has swallowed ${scoredInWindow} fresh scoreline${scoredInWindow === 1 ? "" : "s"}.`
+          ],
+          seed + 3
+        )
       : "The latest official scores are still making their way through the feed.";
+  const scotlandCopy = scotlandWin ? " Scotland have won, so all normal levels of confidence may now be exceeded." : "";
+  const bigWinCopy =
+    biggestWin && margin(biggestWin) >= 3
+      ? ` Biggest statement result: ${winningTeamName(biggestWin)} by ${margin(biggestWin)} goals.`
+      : "";
+  const climberCopy = climber ? ` ${climber.name} is the mover today, up ${climber.movement} place${climber.movement === 1 ? "" : "s"}.` : "";
+  const encouragementCopy =
+    encouragement && encouragement.missedPicks > 0
+      ? ` Gentle nudge for ${encouragement.name}: ${encouragement.missedPicks} completed-game pick${encouragement.missedPicks === 1 ? "" : "s"} missed, but comebacks are basically tournament tradition.`
+      : "";
   const providerCopy =
     finishedWithoutScores > 0
       ? ` ${finishedWithoutScores} finished match${finishedWithoutScores === 1 ? " is" : "es are"} still waiting on a full-time score from the provider.`
       : "";
 
-  return `${leaderCopy}. ${resultCopy}${providerCopy} Plenty of time for a heroic comeback, or at least a very confident group chat message.`;
+  return `${leaderCopy}. ${resultCopy}${scotlandCopy}${bigWinCopy}${climberCopy}${encouragementCopy}${providerCopy}`;
 };
 
 const buildLeaderboard = ({
@@ -170,6 +225,7 @@ const buildLeaderboard = ({
         gamesPlayed,
         goalsCorrect,
         goalsIncorrect: gamesPlayed * 2 - goalsCorrect,
+        missedPicks: matches.filter((match) => !hasScore(predictions.get(`${player.id}:${match.id}`))).length,
         movement: 0,
         name: player.display_name,
         playerId: player.id,
@@ -198,6 +254,7 @@ const buildDigestHtml = ({
   digestStart,
   leaderboard,
   players,
+  previousLeaderboard,
   predictions,
   todayMatches,
   windowMatches
@@ -207,11 +264,12 @@ const buildDigestHtml = ({
   digestStart: Date;
   leaderboard: LeaderboardRow[];
   players: PlayerRow[];
+  previousLeaderboard: LeaderboardRow[];
   predictions: Map<string, Score>;
   todayMatches: MatchRow[];
   windowMatches: MatchRow[];
 }) => {
-  const summary = buildSummary({ leaderboard, windowMatches });
+  const summary = buildSummary({ leaderboard, previousLeaderboard, windowMatches });
   const leaderboardRows = leaderboard
     .map(
       (player, index) => `
@@ -224,6 +282,7 @@ const buildDigestHtml = ({
           <td>${player.goalsIncorrect}</td>
           <td>${player.resultCorrect}</td>
           <td>${player.exactScores}</td>
+          <td>${player.missedPicks}</td>
           <td>${player.points}</td>
         </tr>`
     )
@@ -294,17 +353,17 @@ const buildDigestHtml = ({
       <body>
         <main>
           <p class="muted">Family World Cup Pool</p>
-          <h1>7am digest - ${htmlEscape(displayDate(digestEnd))}</h1>
+          <h1>7:30am digest - ${htmlEscape(displayDate(digestEnd))}</h1>
           <p>${htmlEscape(summary)}</p>
           <p><a class="button" href="${htmlEscape(appUrl)}">Open the predictor</a></p>
 
           <section class="card">
             <h2>Leaderboard</h2>
             <table>
-              <thead><tr><th>#</th><th>Move</th><th>Player</th><th>GP</th><th>GC</th><th>GI</th><th>RC</th><th>EX</th><th>Pts</th></tr></thead>
+              <thead><tr><th>#</th><th>Move</th><th>Player</th><th>GP</th><th>GC</th><th>GI</th><th>RC</th><th>EX</th><th>MP</th><th>Pts</th></tr></thead>
               <tbody>${leaderboardRows}</tbody>
             </table>
-            <p class="muted key">Key: GP = games played, GC = goals correct, GI = goals incorrect, RC = results correct, EX = exact scores, Pts = total points.</p>
+            <p class="muted key">Key: GP = games played, GC = goals correct, GI = goals incorrect, RC = results correct, EX = exact scores, MP = missed picks on completed games, Pts = total points.</p>
           </section>
 
           <section class="card">
@@ -446,6 +505,7 @@ const buildAndSendDigest = async (
     digestStart,
     leaderboard,
     players,
+    previousLeaderboard,
     predictions,
     todayMatches,
     windowMatches

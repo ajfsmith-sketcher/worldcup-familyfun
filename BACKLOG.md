@@ -202,6 +202,7 @@ Implementation:
 Remaining:
 - Replace bracket placeholders with real teams as the tournament progresses.
 - Decide whether knockout scoring should treat extra time/penalties differently.
+- Improve knockout-round filtering and layouts once the bracket starts to take shape. Likely areas: round filters, date filters, compact bracket-style grouping, clearer placeholders before teams are known, and easier scanning of pending picks/results on mobile.
 
 ### 12. Track Tournament Scorers
 
@@ -352,9 +353,9 @@ Status: done
 
 Implementation:
 - Added `players.daily_digest_opt_in`.
-- Added a profile checkbox for the 7am family digest.
+- Added a profile checkbox for the 7:30am family digest.
 - Added `/api/daily-digest`, protected by `CRON_SECRET`.
-- Added Vercel cron for 06:00 UTC during the tournament, which is 7am UK time in June/July.
+- Added Vercel cron for 06:30 UTC during the tournament, which is 7:30am UK time in June/July.
 - Digest includes leaderboard, previous day's games, each player's picks and points, today's fixtures, and a light data-driven summary.
 
 Remaining:

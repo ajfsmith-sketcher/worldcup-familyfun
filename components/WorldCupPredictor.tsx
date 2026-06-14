@@ -2064,7 +2064,7 @@ export function WorldCupPredictor() {
               </button>
               <label className="inline-check compact-check">
                 <input checked={dailyDigestOptIn} onChange={(event) => saveDailyDigestPreference(event.target.checked)} type="checkbox" />
-                <span>7am digest</span>
+                <span>7:30am digest</span>
               </label>
               {isAdmin ? (
                 <button className="text-button" disabled={isSyncingScores} onClick={syncScores} type="button">
@@ -2186,7 +2186,7 @@ export function WorldCupPredictor() {
             />
             <label className="inline-check">
               <input checked={dailyDigestOptIn} onChange={(event) => setDailyDigestOptIn(event.target.checked)} type="checkbox" />
-              <span>Send me the 7am family digest</span>
+              <span>Send me the 7:30am family digest</span>
             </label>
             <button className="button" onClick={saveProfile} type="button">
               Save

@@ -72,7 +72,7 @@ export const arePredictionsRevealed = (match: GameMatch) =>
 
 const matchTime = (match: GameMatch) => (match.kickoffAt ? new Date(match.kickoffAt).getTime() : Number.MAX_SAFE_INTEGER);
 
-export const matchDateKeyInTimeZone = (kickoffAt: string, timeZone = "America/New_York") => {
+export const matchDateKeyInTimeZone = (kickoffAt: string, timeZone = "America/Los_Angeles") => {
   const parts = new Intl.DateTimeFormat("en-CA", {
     day: "2-digit",
     month: "2-digit",

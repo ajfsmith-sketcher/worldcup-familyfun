@@ -63,7 +63,7 @@ NEXT_PUBLIC_SITE_URL=
 `SUPABASE_SERVICE_ROLE_KEY`, `FOOTBALL_DATA_API_TOKEN`, and `BREVO_API_KEY` are server-only values used by cron/admin routes.
 Do not expose them with `NEXT_PUBLIC_`.
 
-The daily 7am family digest uses Brevo transactional email. Set `BREVO_API_KEY` and a verified `DIGEST_SENDER_EMAIL`
+The daily 7:30am family digest uses Brevo transactional email. Set `BREVO_API_KEY` and a verified `DIGEST_SENDER_EMAIL`
 in Vercel before enabling the cron in production. `NEXT_PUBLIC_SITE_URL` should point at the public Vercel URL.
 
 The match seed includes the official group-stage schedule and knockout bracket placeholders in UTC. Kickoff times drive prediction locking,
