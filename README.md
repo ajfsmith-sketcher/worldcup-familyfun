@@ -2,6 +2,8 @@
 
 A private family score predictor for the FIFA World Cup 2026.
 
+For a fuller shareable handover covering architecture, database design, APIs, Vercel, cron jobs, and product decisions, see [`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md).
+
 Players predict the score for each World Cup match, from the group stage through the final. The leaderboard awards:
 
 - 1 point for the correct home-team score
