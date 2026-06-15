@@ -224,6 +224,8 @@ const workspaceTabs: WorkspaceTabItem[] = [
 
 const emptyScore = (): ScorePick => ({ away: "", home: "" });
 
+const isEmptyScore = (score: ScorePick | undefined) => !score || (score.home === "" && score.away === "");
+
 const emptyMatchScores = (matches: MatchWithState[] = worldCupMatches) =>
   matches.reduce(
     (scores, match) => ({
@@ -1578,7 +1580,7 @@ export function WorldCupPredictor() {
     );
     if (!hasScore(score)) {
       setPredictionSaveStatus((currentStatus) => ({ ...currentStatus, [matchId]: { scoreKey: "", status: "idle" } }));
-      if (isSupabaseConfigured) {
+      if (isSupabaseConfigured && isEmptyScore(score)) {
         clearPrediction(matchId);
       }
       return;
