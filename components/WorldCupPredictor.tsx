@@ -1797,7 +1797,7 @@ export function WorldCupPredictor() {
     const locked = isPredictionLocked(match);
     const currentSaveStatus = predictionSaveStatus[match.id];
     const predictionStatus = currentSaveStatus?.scoreKey === scoreKey(activePick) ? currentSaveStatus.status : "idle";
-    const showDashboardQuickPick = !completed && !locked && !hasScore(activePick);
+    const showDashboardQuickPick = !completed && (!locked || hasScore(activePick));
 
     return (
       <article className="next-match-card" key={match.id}>
@@ -1822,11 +1822,13 @@ export function WorldCupPredictor() {
           <div className="dashboard-quick-pick">
             <strong>Your pick</strong>
             <ScoreInputs
+              disabled={locked}
               label={`${activePlayer?.name ?? "Player"}'s prediction for ${match.label}`}
               match={match}
               onChange={(score) => updateActiveMatchScore(match.id, score)}
               saveStatus={predictionStatus}
               score={activePick}
+              urgencyStatus={locked ? "locked" : isPredictionLockWarning(match) ? "warning" : "idle"}
             />
           </div>
         ) : null}
