@@ -1411,6 +1411,33 @@ export function WorldCupPredictor() {
     setSyncMessage(error ? error.message : "Prediction saved.");
   };
 
+  const clearPrediction = async (matchId: string) => {
+    if (!supabase || !session) return;
+    setPredictionSaveStatus((currentStatus) => ({ ...currentStatus, [matchId]: { scoreKey: "", status: "saving" } }));
+    const { data } = await supabase.auth.getSession();
+    const accessToken = data.session?.access_token;
+    if (!accessToken) {
+      setPredictionSaveStatus((currentStatus) => ({ ...currentStatus, [matchId]: { scoreKey: "", status: "error" } }));
+      setSyncMessage("Sign in again before clearing a prediction.");
+      return;
+    }
+
+    const response = await fetch("/api/predictions/clear", {
+      body: JSON.stringify({ matchId }),
+      headers: {
+        Authorization: `Bearer ${accessToken}`,
+        "content-type": "application/json"
+      },
+      method: "POST"
+    });
+    const payload = (await response.json()) as { error?: string };
+    setPredictionSaveStatus((currentStatus) => ({ ...currentStatus, [matchId]: { scoreKey: "", status: response.ok ? "idle" : "error" } }));
+    setSyncMessage(response.ok ? "Prediction cleared." : payload.error ?? "Could not clear prediction.");
+    if (response.ok) {
+      await loadSharedState(session);
+    }
+  };
+
   const saveResult = async (matchId: string, score: ScorePick) => {
     if (!supabase) return;
     const nextHomeScore = score.home === "" ? null : Number(score.home);
@@ -1551,6 +1578,9 @@ export function WorldCupPredictor() {
     );
     if (!hasScore(score)) {
       setPredictionSaveStatus((currentStatus) => ({ ...currentStatus, [matchId]: { scoreKey: "", status: "idle" } }));
+      if (isSupabaseConfigured) {
+        clearPrediction(matchId);
+      }
       return;
     }
     if (isSupabaseConfigured) {
@@ -1764,6 +1794,10 @@ export function WorldCupPredictor() {
     const activePick = normalizeScore(activePlayer?.matchPredictions[match.id]);
     const completed = hasScore(actualScore);
     const forecastCounts = forecast ? forecastResultCounts(match, forecast) : [];
+    const locked = isPredictionLocked(match);
+    const currentSaveStatus = predictionSaveStatus[match.id];
+    const predictionStatus = currentSaveStatus?.scoreKey === scoreKey(activePick) ? currentSaveStatus.status : "idle";
+    const showDashboardQuickPick = !completed && !locked && !hasScore(activePick);
 
     return (
       <article className="next-match-card" key={match.id}>
@@ -1784,6 +1818,18 @@ export function WorldCupPredictor() {
           {hasOdds(match) ? <small className="match-odds">{oddsCopy(match)}</small> : null}
         </div>
         {completed ? <ActualScoreDisplay match={match} points={hasScore(activePick) ? matchPoints(activePick, actualScore) : undefined} score={actualScore} scorers={matchScorersForMatch(match.id)} /> : null}
+        {showDashboardQuickPick ? (
+          <div className="dashboard-quick-pick">
+            <strong>Your pick</strong>
+            <ScoreInputs
+              label={`${activePlayer?.name ?? "Player"}'s prediction for ${match.label}`}
+              match={match}
+              onChange={(score) => updateActiveMatchScore(match.id, score)}
+              saveStatus={predictionStatus}
+              score={activePick}
+            />
+          </div>
+        ) : null}
         <div className="family-forecast">
           <strong>Family forecast</strong>
           {forecast ? (
