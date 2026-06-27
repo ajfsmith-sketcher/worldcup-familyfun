@@ -222,6 +222,30 @@ const workspaceTabs: WorkspaceTabItem[] = [
   { icon: "admin", label: "Admin", tab: "admin" }
 ];
 
+const fetchPredictionRows = async (client: NonNullable<typeof supabase>) => {
+  const pageSize = 1000;
+  const rows: PredictionRow[] = [];
+
+  for (let from = 0; ; from += pageSize) {
+    const to = from + pageSize - 1;
+    const response = await client
+      .from("predictions")
+      .select("player_id, match_id, home_score, away_score")
+      .range(from, to);
+
+    if (response.error) {
+      throw new Error(response.error.message);
+    }
+
+    const page = (response.data ?? []) as PredictionRow[];
+    rows.push(...page);
+
+    if (page.length < pageSize) {
+      return rows;
+    }
+  }
+};
+
 const emptyScore = (): ScorePick => ({ away: "", home: "" });
 
 const isEmptyScore = (score: ScorePick | undefined) => !score || (score.home === "" && score.away === "");
@@ -969,24 +993,30 @@ export function WorldCupPredictor() {
     if (!supabase) return;
     setSyncMessage("Syncing shared game...");
 
-    const [playerResponse, matchResponse, predictionResponse, statusResponse, scorerResponse, forecastResponse] = await Promise.all([
+    const [playerResponse, matchResponse, statusResponse, scorerResponse, forecastResponse] = await Promise.all([
       supabase.from("players").select("id, display_name, daily_digest_opt_in").order("display_name"),
       supabase.from("matches").select("*").order("match_number", { nullsFirst: false }),
-      supabase.from("predictions").select("player_id, match_id, home_score, away_score"),
       supabase.rpc("player_prediction_status"),
       supabase.from("tournament_scorers").select("*").order("goals", { ascending: false }).order("player_name"),
       supabase.rpc("family_match_forecasts", { minimum_picks: FAMILY_FORECAST_MINIMUM_PICKS })
     ]);
 
-    if (playerResponse.error || matchResponse.error || predictionResponse.error || statusResponse.error || scorerResponse.error) {
+    if (playerResponse.error || matchResponse.error || statusResponse.error || scorerResponse.error) {
       setSyncMessage(
         playerResponse.error?.message ||
           matchResponse.error?.message ||
-          predictionResponse.error?.message ||
           statusResponse.error?.message ||
           scorerResponse.error?.message ||
           "Could not sync shared game."
       );
+      return;
+    }
+
+    let predictions: PredictionRow[] = [];
+    try {
+      predictions = await fetchPredictionRows(supabase);
+    } catch (error) {
+      setSyncMessage(error instanceof Error ? error.message : "Could not sync predictions.");
       return;
     }
 
@@ -1024,7 +1054,6 @@ export function WorldCupPredictor() {
       setDailyDigestOptIn(false);
     }
 
-    const predictions = (predictionResponse.data ?? []) as PredictionRow[];
     const currentPlayerSaveStatus: Record<string, PredictionSaveState> = {};
     predictions.forEach((prediction) => {
       const player = sharedPlayers.find((item) => item.id === prediction.player_id);
