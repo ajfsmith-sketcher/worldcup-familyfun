@@ -418,6 +418,30 @@ const sendDigestEmail = async ({
   }
 };
 
+const fetchPredictionRows = async (supabase: SupabaseAdminClient) => {
+  const pageSize = 1000;
+  const rows: PredictionRow[] = [];
+
+  for (let from = 0; ; from += pageSize) {
+    const to = from + pageSize - 1;
+    const response = await supabase
+      .from("predictions")
+      .select("player_id, match_id, home_score, away_score")
+      .range(from, to);
+
+    if (response.error) {
+      throw new Error(response.error.message);
+    }
+
+    const page = (response.data ?? []) as PredictionRow[];
+    rows.push(...page);
+
+    if (page.length < pageSize) {
+      return rows;
+    }
+  }
+};
+
 const createContext = () => {
   const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL;
   const serviceRoleKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
@@ -464,21 +488,21 @@ const buildAndSendDigest = async (
   { baseUrl, brevoApiKey, senderEmail, senderName, supabase }: DigestContext,
   options: { testRecipientId?: string } = {}
 ) => {
-  const [playersResponse, matchesResponse, predictionsResponse, usersResponse] = await Promise.all([
+  const [playersResponse, matchesResponse, usersResponse] = await Promise.all([
     supabase.from("players").select("id, display_name, daily_digest_opt_in").order("display_name"),
     supabase.from("matches").select("id, match_number, home_name, home_code, away_name, away_code, kickoff_at, home_score, away_score, score_status").order("kickoff_at"),
-    supabase.from("predictions").select("player_id, match_id, home_score, away_score"),
     supabase.auth.admin.listUsers({ page: 1, perPage: 1000 })
   ]);
 
-  if (playersResponse.error || matchesResponse.error || predictionsResponse.error || usersResponse.error) {
-    throw new Error(playersResponse.error?.message || matchesResponse.error?.message || predictionsResponse.error?.message || usersResponse.error?.message);
+  if (playersResponse.error || matchesResponse.error || usersResponse.error) {
+    throw new Error(playersResponse.error?.message || matchesResponse.error?.message || usersResponse.error?.message);
   }
 
   const players = (playersResponse.data ?? []) as PlayerRow[];
   const matches = (matchesResponse.data ?? []) as MatchRow[];
+  const predictionRows = await fetchPredictionRows(supabase);
   const predictions = new Map(
-    ((predictionsResponse.data ?? []) as PredictionRow[]).map((prediction) => [
+    predictionRows.map((prediction) => [
       `${prediction.player_id}:${prediction.match_id}`,
       { away: prediction.away_score, home: prediction.home_score }
     ])
