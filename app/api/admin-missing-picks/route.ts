@@ -49,19 +49,17 @@ export async function GET(request: NextRequest) {
     return NextResponse.json({ error: "Admin access required." }, { status: 403 });
   }
 
-  const [matchesResponse, playersResponse, predictionsResponse] = await Promise.all([
+  const [matchesResponse, playersResponse] = await Promise.all([
     supabase.from("matches").select("id, home_name, home_flag, away_name, away_flag, kickoff_at").order("kickoff_at"),
-    supabase.from("players").select("id, display_name").order("display_name"),
-    supabase.from("predictions").select("player_id, match_id")
+    supabase.from("players").select("id, display_name").order("display_name")
   ]);
 
-  if (matchesResponse.error || playersResponse.error || predictionsResponse.error) {
+  if (matchesResponse.error || playersResponse.error) {
     return NextResponse.json(
       {
         error:
           matchesResponse.error?.message ||
           playersResponse.error?.message ||
-          predictionsResponse.error?.message ||
           "Could not load missing picks."
       },
       { status: 500 }
@@ -73,6 +71,19 @@ export async function GET(request: NextRequest) {
     (match) => match.kickoff_at && matchDateKeyInTimeZone(match.kickoff_at) === todayUsKey
   );
   const players = (playersResponse.data ?? []) as PlayerRow[];
+
+  const predictionsResponse =
+    matches.length > 0
+      ? await supabase.from("predictions").select("player_id, match_id").in(
+          "match_id",
+          matches.map((match) => match.id)
+        )
+      : { data: [], error: null };
+
+  if (predictionsResponse.error) {
+    return NextResponse.json({ error: predictionsResponse.error.message }, { status: 500 });
+  }
+
   const predictionKeys = new Set(
     ((predictionsResponse.data ?? []) as PredictionRow[]).map((prediction) => `${prediction.player_id}:${prediction.match_id}`)
   );
