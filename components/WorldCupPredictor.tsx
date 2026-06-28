@@ -139,6 +139,17 @@ type AdminMissingPickRow = {
   missingPlayers: string[];
 };
 
+type FixtureVerificationRow = {
+  awayMatches: boolean;
+  homeMatches: boolean;
+  matchNumber: number;
+  sourceAwayName: string;
+  sourceHomeName: string;
+  status: "mismatch" | "ok";
+  supabaseAwayName: string;
+  supabaseHomeName: string;
+};
+
 type ScorerRow = {
   assists: number | null;
   goals: number;
@@ -920,6 +931,10 @@ export function WorldCupPredictor() {
   const [scoreSyncMessage, setScoreSyncMessage] = useState("");
   const [isSendingDigest, setIsSendingDigest] = useState(false);
   const [isSyncingScores, setIsSyncingScores] = useState(false);
+  const [isVerifyingFixtures, setIsVerifyingFixtures] = useState(false);
+  const [fixtureVerificationMessage, setFixtureVerificationMessage] = useState("");
+  const [fixtureVerificationRows, setFixtureVerificationRows] = useState<FixtureVerificationRow[]>([]);
+  const [fixtureVerificationCheckedAt, setFixtureVerificationCheckedAt] = useState("");
   const [isInfoOpen, setIsInfoOpen] = useState(false);
   const [isSettingsOpen, setIsSettingsOpen] = useState(false);
   const [isTableKeyOpen, setIsTableKeyOpen] = useState(false);
@@ -1560,6 +1575,44 @@ export function WorldCupPredictor() {
 
     setScoreSyncMessage(`Test digest sent to ${payload.recipients ?? 0} recipient${payload.recipients === 1 ? "" : "s"}.`);
     setIsSendingDigest(false);
+  };
+
+  const verifyKnockoutFixtures = async () => {
+    if (!supabase || !session || !isAdmin) return;
+    setIsVerifyingFixtures(true);
+    setFixtureVerificationMessage("Checking Round of 32 fixtures...");
+    const { data } = await supabase.auth.getSession();
+    const accessToken = data.session?.access_token;
+    if (!accessToken) {
+      setFixtureVerificationMessage("Sign in again to verify fixtures.");
+      setIsVerifyingFixtures(false);
+      return;
+    }
+
+    const response = await fetch("/api/admin-fixture-verification", {
+      headers: {
+        Authorization: `Bearer ${accessToken}`
+      }
+    });
+    const payload = (await response.json()) as {
+      checkedAt?: string;
+      error?: string;
+      mismatchCount?: number;
+      rows?: FixtureVerificationRow[];
+    };
+
+    if (!response.ok) {
+      setFixtureVerificationMessage(payload.error ?? "Could not verify fixtures.");
+      setIsVerifyingFixtures(false);
+      return;
+    }
+
+    setFixtureVerificationRows(payload.rows ?? []);
+    setFixtureVerificationCheckedAt(payload.checkedAt ?? "");
+    setFixtureVerificationMessage(
+      `${payload.mismatchCount ?? 0} fixture ${payload.mismatchCount === 1 ? "mismatch" : "mismatches"} found.`
+    );
+    setIsVerifyingFixtures(false);
   };
 
   const loadAdminMissingPicks = async () => {
@@ -2686,6 +2739,9 @@ export function WorldCupPredictor() {
                     <button className="text-button" disabled={isSendingDigest} onClick={sendTestDigest} type="button">
                       {isSendingDigest ? "Sending..." : "Send test digest"}
                     </button>
+                    <button className="text-button" disabled={isVerifyingFixtures} onClick={verifyKnockoutFixtures} type="button">
+                      {isVerifyingFixtures ? "Verifying..." : "Verify fixtures"}
+                    </button>
                   </div>
                 </div>
 
@@ -2734,6 +2790,39 @@ export function WorldCupPredictor() {
                   </div>
                 </div>
                 {adminScoreSyncUsage.lastRun?.error ? <p className="sync-message">Last score sync note: {adminScoreSyncUsage.lastRun.error}</p> : null}
+
+                <section className="admin-missing-picks">
+                  <div className="family-section-heading">
+                    <div>
+                      <p className="eyebrow">Backup source</p>
+                      <h3>Round of 32 fixture check</h3>
+                    </div>
+                    {fixtureVerificationRows.length > 0 ? (
+                      <span className={`badge ${fixtureVerificationRows.some((row) => row.status !== "ok") ? "warning" : "ok"}`}>
+                        {fixtureVerificationRows.filter((row) => row.status !== "ok").length} mismatch
+                      </span>
+                    ) : null}
+                  </div>
+                  {fixtureVerificationMessage ? <p className="sync-message">{fixtureVerificationMessage}</p> : null}
+                  {fixtureVerificationCheckedAt ? (
+                    <p className="muted-copy">Checked {new Intl.DateTimeFormat("en-GB", { dateStyle: "medium", timeStyle: "short" }).format(new Date(fixtureVerificationCheckedAt))}</p>
+                  ) : null}
+                  {fixtureVerificationRows.length > 0 ? (
+                    <div className="admin-missing-list fixture-verification-list">
+                      {fixtureVerificationRows.map((row) => (
+                        <article className={row.status !== "ok" ? "needs-pick" : ""} key={row.matchNumber}>
+                          <strong>Match {row.matchNumber}</strong>
+                          <span>
+                            App: {row.supabaseHomeName} vs {row.supabaseAwayName}
+                          </span>
+                          <small>
+                            Backup: {row.sourceHomeName || "-"} vs {row.sourceAwayName || "-"}
+                          </small>
+                        </article>
+                      ))}
+                    </div>
+                  ) : null}
+                </section>
 
                 <section className="admin-missing-picks">
                   <div className="family-section-heading">

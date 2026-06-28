@@ -972,6 +972,14 @@ h2 {
   font-weight: 900;
 }
 
+.fixture-verification-list article {
+  grid-template-columns: 90px minmax(0, 1fr);
+}
+
+.fixture-verification-list strong {
+  grid-row: span 2;
+}
+
 .admin-filter-grid {
   grid-template-columns: minmax(220px, 360px);
 }
