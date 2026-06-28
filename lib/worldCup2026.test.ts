@@ -9,9 +9,13 @@ describe("worldCupMatches", () => {
     expect(worldCupMatches.at(-1)?.matchNumber).toBe(104);
   });
 
-  it("keeps knockout matches as bracket placeholders until teams are known", () => {
+  it("includes the confirmed Round of 32 teams and keeps later rounds as placeholders", () => {
+    const opener = knockoutMatches.find((match) => match.matchNumber === 73);
     const final = knockoutMatches.find((match) => match.matchNumber === 104);
 
+    expect(opener?.round).toBe("Round of 32");
+    expect(opener?.homeTeam.name).toBe("South Africa");
+    expect(opener?.awayTeam.name).toBe("Canada");
     expect(final?.round).toBe("Final");
     expect(final?.homeTeam.name).toBe("Winner Match 101");
     expect(final?.awayTeam.name).toBe("Winner Match 102");

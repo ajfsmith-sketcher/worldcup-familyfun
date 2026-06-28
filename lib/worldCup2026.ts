@@ -173,6 +173,8 @@ const placeholderTeam = (name: string): Team => ({
   name
 });
 
+const knockoutTeam = (codeOrPlaceholder: string) => (teamByCode.has(codeOrPlaceholder) ? team(codeOrPlaceholder) : placeholderTeam(codeOrPlaceholder));
+
 type ScheduleMatch = {
   away: string;
   city: string;
@@ -270,22 +272,22 @@ const officialGroupSchedule: ScheduleMatch[] = [
 ];
 
 const officialKnockoutSchedule: KnockoutMatch[] = [
-  { matchNumber: 73, round: "Round of 32", home: "Group A runners-up", away: "Group B runners-up", kickoffAt: "2026-06-28T19:00:00Z", venue: "Los Angeles Stadium", city: "Los Angeles" },
-  { matchNumber: 74, round: "Round of 32", home: "Group E winners", away: "Group A/B/C/D/F third place", kickoffAt: "2026-06-29T20:30:00Z", venue: "Boston Stadium", city: "Boston" },
-  { matchNumber: 75, round: "Round of 32", home: "Group F winners", away: "Group C runners-up", kickoffAt: "2026-06-30T01:00:00Z", venue: "Monterrey Stadium", city: "Monterrey" },
-  { matchNumber: 76, round: "Round of 32", home: "Group C winners", away: "Group F runners-up", kickoffAt: "2026-06-29T17:00:00Z", venue: "Houston Stadium", city: "Houston" },
-  { matchNumber: 77, round: "Round of 32", home: "Group I winners", away: "Group C/D/F/G/H third place", kickoffAt: "2026-06-30T21:00:00Z", venue: "New York New Jersey Stadium", city: "New York/New Jersey" },
-  { matchNumber: 78, round: "Round of 32", home: "Group E runners-up", away: "Group I runners-up", kickoffAt: "2026-06-30T17:00:00Z", venue: "Dallas Stadium", city: "Dallas" },
-  { matchNumber: 79, round: "Round of 32", home: "Group A winners", away: "Group C/E/F/H/I third place", kickoffAt: "2026-07-01T01:00:00Z", venue: "Mexico City Stadium", city: "Mexico City" },
-  { matchNumber: 80, round: "Round of 32", home: "Group L winners", away: "Group E/H/I/J/K third place", kickoffAt: "2026-07-01T16:00:00Z", venue: "Atlanta Stadium", city: "Atlanta" },
-  { matchNumber: 81, round: "Round of 32", home: "Group D winners", away: "Group B/E/F/I/J third place", kickoffAt: "2026-07-02T00:00:00Z", venue: "San Francisco Bay Area Stadium", city: "San Francisco Bay Area" },
-  { matchNumber: 82, round: "Round of 32", home: "Group G winners", away: "Group A/E/H/I/J third place", kickoffAt: "2026-07-01T20:00:00Z", venue: "Seattle Stadium", city: "Seattle" },
-  { matchNumber: 83, round: "Round of 32", home: "Group K runners-up", away: "Group L runners-up", kickoffAt: "2026-07-02T23:00:00Z", venue: "Toronto Stadium", city: "Toronto" },
-  { matchNumber: 84, round: "Round of 32", home: "Group H winners", away: "Group J runners-up", kickoffAt: "2026-07-02T19:00:00Z", venue: "Los Angeles Stadium", city: "Los Angeles" },
-  { matchNumber: 85, round: "Round of 32", home: "Group B winners", away: "Group E/F/G/I/J third place", kickoffAt: "2026-07-03T03:00:00Z", venue: "Vancouver Stadium", city: "Vancouver" },
-  { matchNumber: 86, round: "Round of 32", home: "Group J winners", away: "Group H runners-up", kickoffAt: "2026-07-03T22:00:00Z", venue: "Miami Stadium", city: "Miami" },
-  { matchNumber: 87, round: "Round of 32", home: "Group K winners", away: "Group D/E/I/J/L third place", kickoffAt: "2026-07-04T01:30:00Z", venue: "Kansas City Stadium", city: "Kansas City" },
-  { matchNumber: 88, round: "Round of 32", home: "Group D runners-up", away: "Group G runners-up", kickoffAt: "2026-07-03T18:00:00Z", venue: "Dallas Stadium", city: "Dallas" },
+  { matchNumber: 73, round: "Round of 32", home: "RSA", away: "CAN", kickoffAt: "2026-06-28T19:00:00Z", venue: "Los Angeles Stadium", city: "Los Angeles" },
+  { matchNumber: 74, round: "Round of 32", home: "GER", away: "PAR", kickoffAt: "2026-06-29T20:30:00Z", venue: "Boston Stadium", city: "Boston" },
+  { matchNumber: 75, round: "Round of 32", home: "NED", away: "MAR", kickoffAt: "2026-06-30T01:00:00Z", venue: "Monterrey Stadium", city: "Monterrey" },
+  { matchNumber: 76, round: "Round of 32", home: "BRA", away: "JPN", kickoffAt: "2026-06-29T17:00:00Z", venue: "Houston Stadium", city: "Houston" },
+  { matchNumber: 77, round: "Round of 32", home: "FRA", away: "SWE", kickoffAt: "2026-06-30T21:00:00Z", venue: "New York New Jersey Stadium", city: "New York/New Jersey" },
+  { matchNumber: 78, round: "Round of 32", home: "CIV", away: "NOR", kickoffAt: "2026-06-30T17:00:00Z", venue: "Dallas Stadium", city: "Dallas" },
+  { matchNumber: 79, round: "Round of 32", home: "MEX", away: "ECU", kickoffAt: "2026-07-01T01:00:00Z", venue: "Mexico City Stadium", city: "Mexico City" },
+  { matchNumber: 80, round: "Round of 32", home: "ENG", away: "COD", kickoffAt: "2026-07-01T16:00:00Z", venue: "Atlanta Stadium", city: "Atlanta" },
+  { matchNumber: 81, round: "Round of 32", home: "USA", away: "BIH", kickoffAt: "2026-07-02T00:00:00Z", venue: "San Francisco Bay Area Stadium", city: "San Francisco Bay Area" },
+  { matchNumber: 82, round: "Round of 32", home: "BEL", away: "SEN", kickoffAt: "2026-07-01T20:00:00Z", venue: "Seattle Stadium", city: "Seattle" },
+  { matchNumber: 83, round: "Round of 32", home: "POR", away: "CRO", kickoffAt: "2026-07-02T23:00:00Z", venue: "Toronto Stadium", city: "Toronto" },
+  { matchNumber: 84, round: "Round of 32", home: "ESP", away: "AUT", kickoffAt: "2026-07-02T19:00:00Z", venue: "Los Angeles Stadium", city: "Los Angeles" },
+  { matchNumber: 85, round: "Round of 32", home: "SUI", away: "ALG", kickoffAt: "2026-07-03T03:00:00Z", venue: "Vancouver Stadium", city: "Vancouver" },
+  { matchNumber: 86, round: "Round of 32", home: "ARG", away: "CPV", kickoffAt: "2026-07-03T22:00:00Z", venue: "Miami Stadium", city: "Miami" },
+  { matchNumber: 87, round: "Round of 32", home: "COL", away: "GHA", kickoffAt: "2026-07-04T01:30:00Z", venue: "Kansas City Stadium", city: "Kansas City" },
+  { matchNumber: 88, round: "Round of 32", home: "AUS", away: "EGY", kickoffAt: "2026-07-03T18:00:00Z", venue: "Dallas Stadium", city: "Dallas" },
   { matchNumber: 89, round: "Round of 16", home: "Winner Match 74", away: "Winner Match 77", kickoffAt: "2026-07-04T21:00:00Z", venue: "Philadelphia Stadium", city: "Philadelphia" },
   { matchNumber: 90, round: "Round of 16", home: "Winner Match 73", away: "Winner Match 75", kickoffAt: "2026-07-04T17:00:00Z", venue: "Houston Stadium", city: "Houston" },
   { matchNumber: 91, round: "Round of 16", home: "Winner Match 76", away: "Winner Match 78", kickoffAt: "2026-07-05T20:00:00Z", venue: "New York New Jersey Stadium", city: "New York/New Jersey" },
@@ -327,10 +329,10 @@ export const worldCupMatches: WorldCupMatch[] = [
     venue: match.venue
   })),
   ...officialKnockoutSchedule.map((match) => ({
-    awayTeam: placeholderTeam(match.away),
+    awayTeam: knockoutTeam(match.away),
     city: match.city,
     groupId: "KO" as const,
-    homeTeam: placeholderTeam(match.home),
+    homeTeam: knockoutTeam(match.home),
     id: `KO-${match.matchNumber}`,
     kickoffAt: match.kickoffAt,
     label: `Match ${match.matchNumber}`,
