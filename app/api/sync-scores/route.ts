@@ -26,9 +26,31 @@ type FootballDataMatch = {
     tla?: string;
   };
   score?: {
+    duration?: string | null;
+    winner?: string | null;
     fullTime?: {
       home?: number | null;
+      homeTeam?: number | null;
       away?: number | null;
+      awayTeam?: number | null;
+    };
+    regularTime?: {
+      home?: number | null;
+      homeTeam?: number | null;
+      away?: number | null;
+      awayTeam?: number | null;
+    };
+    extraTime?: {
+      home?: number | null;
+      homeTeam?: number | null;
+      away?: number | null;
+      awayTeam?: number | null;
+    };
+    penalties?: {
+      home?: number | null;
+      homeTeam?: number | null;
+      away?: number | null;
+      awayTeam?: number | null;
     };
   };
   odds?: {
@@ -36,6 +58,13 @@ type FootballDataMatch = {
     draw?: number | null;
     awayWin?: number | null;
   };
+};
+
+type ScoreNode = {
+  away?: number | null;
+  awayTeam?: number | null;
+  home?: number | null;
+  homeTeam?: number | null;
 };
 
 type FootballDataScorer = {
@@ -125,6 +154,25 @@ const findLocalMatch = (apiMatch: FootballDataMatch, localMatches: LocalMatch[])
   });
 };
 
+const scoreSide = (score: ScoreNode | undefined, side: "away" | "home") => {
+  const legacyValue = score?.[side];
+  if (typeof legacyValue === "number") return legacyValue;
+
+  const teamValue = side === "home" ? score?.homeTeam : score?.awayTeam;
+  return typeof teamValue === "number" ? teamValue : null;
+};
+
+const hasScoreNode = (score: ScoreNode | undefined) => typeof scoreSide(score, "home") === "number" && typeof scoreSide(score, "away") === "number";
+
+const addScores = (left: number | null, right: number | null) =>
+  typeof left === "number" && typeof right === "number" ? left + right : null;
+
+const advancingTeam = (winner: string | null | undefined, localMatch: LocalMatch) => {
+  if (winner === "HOME_TEAM") return { code: localMatch.home_code, name: localMatch.home_name };
+  if (winner === "AWAY_TEAM") return { code: localMatch.away_code, name: localMatch.away_name };
+  return { code: null, name: null };
+};
+
 const recordSyncRun = async ({
   error,
   matched,
@@ -198,24 +246,50 @@ const syncScores = async ({ footballDataToken, supabase }: SyncContext) => {
     }
 
     const fullTime = apiMatch.score?.fullTime;
-    const hasScore = typeof fullTime?.home === "number" && typeof fullTime?.away === "number";
+    const regularTime = apiMatch.score?.regularTime;
+    const extraTime = apiMatch.score?.extraTime;
+    const penalties = apiMatch.score?.penalties;
+    const scoreDuration = apiMatch.score?.duration ?? null;
+    const hasScore = hasScoreNode(fullTime);
     if (apiMatch.status === "FINISHED" && !hasScore) {
       finishedWithoutScore += 1;
     }
 
+    const normalHomeScore = scoreSide(regularTime, "home") ?? scoreSide(fullTime, "home");
+    const normalAwayScore = scoreSide(regularTime, "away") ?? scoreSide(fullTime, "away");
+    const extraHomeScore = scoreSide(extraTime, "home");
+    const extraAwayScore = scoreSide(extraTime, "away");
+    const penaltiesHomeScore = scoreSide(penalties, "home");
+    const penaltiesAwayScore = scoreSide(penalties, "away");
+    const afterExtraHomeScore =
+      hasScoreNode(extraTime) ? addScores(normalHomeScore, extraHomeScore) : scoreDuration === "EXTRA_TIME" ? scoreSide(fullTime, "home") : null;
+    const afterExtraAwayScore =
+      hasScoreNode(extraTime) ? addScores(normalAwayScore, extraAwayScore) : scoreDuration === "EXTRA_TIME" ? scoreSide(fullTime, "away") : null;
+    const advanced = advancingTeam(apiMatch.score?.winner, localMatch);
+
     const update: Record<string, number | string | null> = {
+      advancing_team_code: advanced.code,
+      advancing_team_name: advanced.name,
+      after_extra_time_away_score: afterExtraAwayScore,
+      after_extra_time_home_score: afterExtraHomeScore,
       external_match_id: String(apiMatch.id),
       external_provider: "football-data.org",
       last_synced_at: new Date().toISOString(),
+      normal_time_away_score: normalAwayScore,
+      normal_time_home_score: normalHomeScore,
       odds_away_win: apiMatch.odds?.awayWin ?? null,
       odds_draw: apiMatch.odds?.draw ?? null,
       odds_home_win: apiMatch.odds?.homeWin ?? null,
+      penalties_away_score: penaltiesAwayScore,
+      penalties_home_score: penaltiesHomeScore,
+      score_duration: scoreDuration,
+      score_winner: apiMatch.score?.winner ?? null,
       score_status: apiMatch.status
     };
 
     if (hasScore) {
-      update.home_score = fullTime.home ?? null;
-      update.away_score = fullTime.away ?? null;
+      update.home_score = scoreSide(fullTime, "home");
+      update.away_score = scoreSide(fullTime, "away");
     }
 
     updates.push(supabase.from("matches").update(update).eq("id", localMatch.id));

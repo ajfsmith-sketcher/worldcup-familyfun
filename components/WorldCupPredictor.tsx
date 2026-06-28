@@ -52,18 +52,31 @@ type Player = {
 };
 
 type MatchWithState = WorldCupMatch & {
+  advancingTeamCode?: string | null;
+  advancingTeamName?: string | null;
+  afterExtraTimeAwayScore?: number | null;
+  afterExtraTimeHomeScore?: number | null;
   awayScore?: number | null;
   homeScore?: number | null;
   lastSyncedAt?: string | null;
+  normalTimeAwayScore?: number | null;
+  normalTimeHomeScore?: number | null;
   odds?: {
     awayWin?: number | null;
     draw?: number | null;
     homeWin?: number | null;
   };
+  penaltiesAwayScore?: number | null;
+  penaltiesHomeScore?: number | null;
+  scoreDuration?: string | null;
   scoreStatus?: string | null;
 };
 
 type MatchRow = {
+  advancing_team_code: string | null;
+  advancing_team_name: string | null;
+  after_extra_time_away_score: number | null;
+  after_extra_time_home_score: number | null;
   away_code: string;
   away_flag: string;
   away_name: string;
@@ -79,10 +92,15 @@ type MatchRow = {
   label: string;
   match_number: number | null;
   last_synced_at: string | null;
+  normal_time_away_score: number | null;
+  normal_time_home_score: number | null;
   odds_away_win: number | null;
   odds_draw: number | null;
   odds_home_win: number | null;
+  penalties_away_score: number | null;
+  penalties_home_score: number | null;
   round: TournamentRound | null;
+  score_duration: string | null;
   score_status: string | null;
   venue: string | null;
 };
@@ -712,6 +730,10 @@ const migratePlayers = (players: unknown): Player[] | null => {
 };
 
 const rowToMatch = (row: MatchRow): MatchWithState => ({
+  advancingTeamCode: row.advancing_team_code,
+  advancingTeamName: row.advancing_team_name,
+  afterExtraTimeAwayScore: row.after_extra_time_away_score,
+  afterExtraTimeHomeScore: row.after_extra_time_home_score,
   awayScore: row.away_score,
   awayTeam: { code: row.away_code, flag: row.away_flag, name: row.away_name },
   city: row.city ?? "",
@@ -723,12 +745,17 @@ const rowToMatch = (row: MatchRow): MatchWithState => ({
   label: row.label,
   lastSyncedAt: row.last_synced_at,
   matchNumber: row.match_number ?? Number(row.id.split("-")[1] ?? 0),
+  normalTimeAwayScore: row.normal_time_away_score,
+  normalTimeHomeScore: row.normal_time_home_score,
   odds: {
     awayWin: row.odds_away_win,
     draw: row.odds_draw,
     homeWin: row.odds_home_win
   },
+  penaltiesAwayScore: row.penalties_away_score,
+  penaltiesHomeScore: row.penalties_home_score,
   round: row.round ?? "Group stage",
+  scoreDuration: row.score_duration,
   scoreStatus: row.score_status,
   venue: row.venue ?? ""
 });
@@ -813,6 +840,13 @@ function ActualScoreDisplay({
   score: ScorePick;
   scorers?: MatchScorerRow[];
 }) {
+  const hasNormalTime =
+    typeof match.normalTimeHomeScore === "number" && typeof match.normalTimeAwayScore === "number";
+  const hasAfterExtraTime =
+    typeof match.afterExtraTimeHomeScore === "number" && typeof match.afterExtraTimeAwayScore === "number";
+  const hasPenalties =
+    typeof match.penaltiesHomeScore === "number" && typeof match.penaltiesAwayScore === "number";
+
   return (
     <div className="actual-score-card">
       <div className="actual-score-heading">
@@ -830,6 +864,14 @@ function ActualScoreDisplay({
           <b>{score.away}</b>
         </label>
       </div>
+      {hasNormalTime || hasAfterExtraTime || hasPenalties || match.advancingTeamName ? (
+        <div className="score-layer-list">
+          {hasNormalTime ? <span>FT {match.normalTimeHomeScore}-{match.normalTimeAwayScore}</span> : null}
+          {hasAfterExtraTime ? <span>AET {match.afterExtraTimeHomeScore}-{match.afterExtraTimeAwayScore}</span> : null}
+          {hasPenalties ? <span>Pens {match.penaltiesHomeScore}-{match.penaltiesAwayScore}</span> : null}
+          {match.advancingTeamName ? <span>Advances {match.advancingTeamName}</span> : null}
+        </div>
+      ) : null}
       {scorers.length > 0 ? (
         <div className="match-scorers">
           {scorers.map((scorer) => (
@@ -1490,7 +1532,19 @@ export function WorldCupPredictor() {
     const nextAwayScore = score.away === "" ? null : Number(score.away);
     const { error } = await supabase
       .from("matches")
-      .update({ away_score: nextAwayScore, home_score: nextHomeScore })
+      .update({
+        advancing_team_code: null,
+        advancing_team_name: null,
+        after_extra_time_away_score: null,
+        after_extra_time_home_score: null,
+        away_score: nextAwayScore,
+        home_score: nextHomeScore,
+        normal_time_away_score: nextAwayScore,
+        normal_time_home_score: nextHomeScore,
+        penalties_away_score: null,
+        penalties_home_score: null,
+        score_duration: hasScore(score) ? "REGULAR" : null
+      })
       .eq("id", matchId);
     setSyncMessage(error ? error.message : hasScore(score) ? "Actual score saved." : "Actual score cleared.");
     if (!error && session) {
