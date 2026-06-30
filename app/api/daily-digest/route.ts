@@ -122,6 +122,12 @@ const scoreFromMatch = (match: MatchRow): Score | undefined =>
 
 const scoreLabel = (score: Score | undefined) => (score ? `${score.home}-${score.away}` : "-");
 
+const maskEmail = (email: string) => {
+  const [localPart, domain] = email.split("@");
+  if (!domain) return "unknown";
+  return `${localPart.slice(0, 2)}***@${domain}`;
+};
+
 const winningTeamName = (match: MatchRow) => {
   const score = scoreFromMatch(match);
   if (!score || score.home === score.away) return undefined;
@@ -416,6 +422,9 @@ const sendDigestEmail = async ({
     const body = await response.text();
     throw new Error(`Brevo returned ${response.status}${body ? `: ${body.slice(0, 400)}` : ""}`);
   }
+
+  const payload = (await response.json().catch(() => null)) as { messageId?: string } | null;
+  return { messageId: payload?.messageId };
 };
 
 const fetchPredictionRows = async (supabase: SupabaseAdminClient) => {
@@ -486,7 +495,7 @@ const cronAuthorizationError = (request: NextRequest) => {
 
 const buildAndSendDigest = async (
   { baseUrl, brevoApiKey, senderEmail, senderName, supabase }: DigestContext,
-  options: { testRecipientId?: string } = {}
+  options: { schedule?: string | null; testRecipientId?: string } = {}
 ) => {
   const [playersResponse, matchesResponse, usersResponse] = await Promise.all([
     supabase.from("players").select("id, display_name, daily_digest_opt_in").order("display_name"),
@@ -535,28 +544,75 @@ const buildAndSendDigest = async (
     windowMatches
   });
   const subject = `World Cup family digest - ${displayDate(today)}`;
-  const recipients = players
-    .filter((player) => (options.testRecipientId ? player.id === options.testRecipientId : player.daily_digest_opt_in))
-    .map((player) => ({ email: usersById.get(player.id)?.email, name: player.display_name }))
-    .filter((recipient): recipient is { email: string; name: string } => Boolean(recipient.email));
+  const selectedPlayers = players.filter((player) => (options.testRecipientId ? player.id === options.testRecipientId : player.daily_digest_opt_in));
+  const recipientCandidates = selectedPlayers.map((player) => ({
+    email: usersById.get(player.id)?.email,
+    name: player.display_name
+  }));
+  const recipients = recipientCandidates.filter((recipient): recipient is { email: string; name: string } => Boolean(recipient.email));
+  const skippedMissingEmail = recipientCandidates.length - recipients.length;
 
-  await Promise.all(
-    recipients.map((recipient) =>
-      sendDigestEmail({
-        brevoApiKey,
-        htmlContent,
-        recipientEmail: recipient.email,
-        recipientName: recipient.name,
-        senderEmail,
-        senderName,
-        subject
-      })
-    )
+  console.info("Daily digest send started", {
+    mode: options.testRecipientId ? "test" : "scheduled",
+    schedule: options.schedule,
+    selectedPlayers: selectedPlayers.length,
+    skippedMissingEmail,
+    subject
+  });
+
+  const sendResults = await Promise.all(
+    recipients.map(async (recipient) => {
+      try {
+        const result = await sendDigestEmail({
+          brevoApiKey,
+          htmlContent,
+          recipientEmail: recipient.email,
+          recipientName: recipient.name,
+          senderEmail,
+          senderName,
+          subject
+        });
+        return { email: recipient.email, messageId: result.messageId, name: recipient.name, status: "sent" as const };
+      } catch (error) {
+        const message = error instanceof Error ? error.message : "Unknown Brevo error";
+        console.error("Daily digest send failed", {
+          error: message,
+          recipient: maskEmail(recipient.email),
+          recipientName: recipient.name
+        });
+        return { email: recipient.email, error: message, name: recipient.name, status: "failed" as const };
+      }
+    })
   );
 
-  return {
+  const failedResults = sendResults.filter((result) => result.status === "failed");
+  const sentResults = sendResults.filter((result) => result.status === "sent");
+
+  console.info("Daily digest send completed", {
+    failed: failedResults.length,
     mode: options.testRecipientId ? "test" : "scheduled",
     recipients: recipients.length,
+    schedule: options.schedule,
+    sent: sentResults.length,
+    skippedMissingEmail
+  });
+
+  if (failedResults.length === recipients.length && recipients.length > 0) {
+    throw new Error(`Brevo failed for all ${recipients.length} digest recipient${recipients.length === 1 ? "" : "s"}.`);
+  }
+
+  return {
+    failedRecipients: failedResults.map((result) => ({
+      error: result.error,
+      name: result.name,
+      recipient: maskEmail(result.email)
+    })),
+    failed: failedResults.length,
+    mode: options.testRecipientId ? "test" : "scheduled",
+    recipients: recipients.length,
+    selectedPlayers: selectedPlayers.length,
+    sent: sentResults.length,
+    skippedMissingEmail,
     todayMatches: todayMatches.length,
     yesterdayMatches: windowMatches.length
   };
@@ -570,7 +626,7 @@ export async function GET(request: NextRequest) {
   if ("status" in setup) return setup;
 
   try {
-    const result = await buildAndSendDigest(setup.context);
+    const result = await buildAndSendDigest(setup.context, { schedule: request.headers.get("x-vercel-cron-schedule") });
     return NextResponse.json(result);
   } catch (error) {
     return NextResponse.json({ error: error instanceof Error ? error.message : "Could not send daily digest." }, { status: 500 });
