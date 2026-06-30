@@ -193,6 +193,16 @@ type WorkspaceTabItem = {
   tab: WorkspaceTab;
 };
 
+type BracketRound = Exclude<TournamentRound, "Group stage" | "Third place">;
+
+type BracketPlacement = {
+  column: number;
+  rowStart: number;
+  sourceNumbers: number[];
+  targetMatchNumber?: number;
+  match: MatchWithState;
+};
+
 type SyncRunRow = {
   created_at: string;
   error: string | null;
@@ -251,6 +261,19 @@ const workspaceTabs: WorkspaceTabItem[] = [
   { icon: "scorers", label: "Scorers", tab: "scorers" },
   { icon: "admin", label: "Admin", tab: "admin" }
 ];
+
+const bracketRoundColumns: Record<BracketRound, number> = {
+  "Round of 32": 1,
+  "Round of 16": 2,
+  "Quarter-final": 3,
+  "Semi-final": 4,
+  Final: 5
+};
+
+const bracketRoundLabels: BracketRound[] = ["Round of 32", "Round of 16", "Quarter-final", "Semi-final", "Final"];
+const BRACKET_CARD_ROW_SPAN = 7;
+const BRACKET_ROW_STEP = 8;
+const BRACKET_FIRST_MATCH_ROW = 3;
 
 const fetchPredictionRows = async (client: NonNullable<typeof supabase>) => {
   const pageSize = 1000;
@@ -641,6 +664,78 @@ const bracketResultLabel = (match: MatchWithState, results: Record<string, Score
     parts.push(`${match.advancingTeamName} through`);
   }
   return parts.join(" · ");
+};
+
+const sourceMatchNumberForParticipant = (participantName: string) => {
+  const source = participantName.match(/^(Winner|Loser) Match (\d+)$/);
+  return source ? Number(source[2]) : null;
+};
+
+const sourceMatchNumbersForMatch = (match: MatchWithState) =>
+  [match.homeTeam.name, match.awayTeam.name]
+    .map(sourceMatchNumberForParticipant)
+    .filter((matchNumber): matchNumber is number => typeof matchNumber === "number");
+
+const sourceMatchesForMatch = (match: MatchWithState, matchesByNumber: Map<number, MatchWithState>) =>
+  sortMatchesByKickoff(sourceMatchNumbersForMatch(match).map((matchNumber) => matchesByNumber.get(matchNumber)).filter(Boolean) as MatchWithState[]);
+
+const collectBracketLeafNumbers = (match: MatchWithState, matchesByNumber: Map<number, MatchWithState>): number[] => {
+  const sources = sourceMatchesForMatch(match, matchesByNumber);
+  if (sources.length === 0) return [match.matchNumber];
+  return sources.flatMap((sourceMatch) => collectBracketLeafNumbers(sourceMatch, matchesByNumber));
+};
+
+const buildBracketPlacements = (matchesByNumber: Map<number, MatchWithState>, finalMatch?: MatchWithState | null) => {
+  if (!finalMatch) return { maxRow: 1, placements: [] as BracketPlacement[] };
+
+  const leafNumbers = collectBracketLeafNumbers(finalMatch, matchesByNumber);
+  const leafRowByMatchNumber = new Map(leafNumbers.map((matchNumber, index) => [matchNumber, BRACKET_FIRST_MATCH_ROW + index * BRACKET_ROW_STEP]));
+  const placementsByMatchNumber = new Map<number, BracketPlacement>();
+
+  const placeMatch = (match: MatchWithState): BracketPlacement | null => {
+    const existing = placementsByMatchNumber.get(match.matchNumber);
+    if (existing) return existing;
+
+    if (match.round === "Third place" || match.round === "Group stage") return null;
+
+    const sourceNumbers = sourceMatchNumbersForMatch(match);
+    const sourcePlacements = sourceMatchesForMatch(match, matchesByNumber)
+      .map((sourceMatch) => placeMatch(sourceMatch as MatchWithState))
+      .filter(Boolean) as BracketPlacement[];
+
+    const column = bracketRoundColumns[match.round as BracketRound];
+    const rowStart =
+      sourcePlacements.length > 0
+        ? Math.max(
+            BRACKET_FIRST_MATCH_ROW,
+            Math.round(
+              sourcePlacements.reduce((total, placement) => total + placement.rowStart + BRACKET_CARD_ROW_SPAN / 2, 0) /
+                sourcePlacements.length -
+                BRACKET_CARD_ROW_SPAN / 2
+            )
+          )
+        : leafRowByMatchNumber.get(match.matchNumber) ?? BRACKET_FIRST_MATCH_ROW;
+
+    const placement: BracketPlacement = { column, match, rowStart, sourceNumbers };
+    placementsByMatchNumber.set(match.matchNumber, placement);
+    return placement;
+  };
+
+  placeMatch(finalMatch);
+
+  const placements = Array.from(placementsByMatchNumber.values()).sort((first, second) => first.column - second.column || first.rowStart - second.rowStart);
+  const targetBySourceNumber = new Map<number, number>();
+  placements.forEach((placement) => {
+    placement.sourceNumbers.forEach((sourceNumber) => targetBySourceNumber.set(sourceNumber, placement.match.matchNumber));
+  });
+
+  const placementsWithTargets = placements.map((placement) => ({
+    ...placement,
+    targetMatchNumber: targetBySourceNumber.get(placement.match.matchNumber)
+  }));
+  const maxRow = Math.max(...placementsWithTargets.map((placement) => placement.rowStart + BRACKET_CARD_ROW_SPAN), BRACKET_FIRST_MATCH_ROW);
+
+  return { maxRow, placements: placementsWithTargets };
 };
 
 const resultLabelForForecast = (match: MatchWithState, forecast: FamilyForecast) => {
@@ -1399,16 +1494,9 @@ export function WorldCupPredictor() {
     () => new Map(matches.map((match) => [match.matchNumber, match])),
     [matches]
   );
-  const bracketMatchesByRound = useMemo(
-    () =>
-      knockoutRounds
-        .map((round) => ({
-          matches: sortMatchesByKickoff(knockoutMatchList.filter((match) => match.round === round)),
-          round
-        }))
-        .filter((section) => section.matches.length > 0),
-    [knockoutMatchList]
-  );
+  const finalMatch = useMemo(() => knockoutMatchList.find((match) => match.round === "Final"), [knockoutMatchList]);
+  const thirdPlaceMatch = useMemo(() => knockoutMatchList.find((match) => match.round === "Third place"), [knockoutMatchList]);
+  const bracketLayout = useMemo(() => buildBracketPlacements(matchesByNumber, finalMatch), [finalMatch, matchesByNumber]);
   const completedKnockoutCount = useMemo(
     () => knockoutMatchList.filter((match) => hasCompletedResult(match, results)).length,
     [knockoutMatchList, results]
@@ -2746,19 +2834,44 @@ export function WorldCupPredictor() {
                 <div className="bracket-progress" aria-label="Knockout progress">
                   <span style={{ width: `${Math.round((completedKnockoutCount / Math.max(knockoutMatchList.length, 1)) * 100)}%` }} />
                 </div>
-                <div className="bracket-board" aria-label="World Cup knockout bracket">
-                  {bracketMatchesByRound.map((section) => (
-                    <section className="bracket-round" key={section.round}>
-                      <div className="bracket-round-heading">
-                        <strong>{section.round}</strong>
-                        <span>{section.matches.filter((match) => hasCompletedResult(match, results)).length} / {section.matches.length}</span>
-                      </div>
-                      <div className="bracket-round-matches">
-                        {section.matches.map(renderBracketCard)}
-                      </div>
-                    </section>
+                <div
+                  className="bracket-tree"
+                  aria-label="World Cup knockout bracket"
+                  style={{ gridTemplateRows: `repeat(${bracketLayout.maxRow}, 18px)` }}
+                >
+                  {bracketRoundLabels.map((round) => (
+                    <div className="bracket-tree-heading" key={round} style={{ gridColumn: bracketRoundColumns[round], gridRow: "1 / span 1" }}>
+                      <strong>{round}</strong>
+                      <span>
+                        {knockoutMatchList.filter((match) => match.round === round && hasCompletedResult(match, results)).length} /{" "}
+                        {knockoutMatchList.filter((match) => match.round === round).length}
+                      </span>
+                    </div>
+                  ))}
+                  {bracketLayout.placements.map((placement) => (
+                    <div
+                      className={`bracket-tree-slot ${placement.sourceNumbers.length > 0 ? "has-sources" : ""} ${
+                        placement.targetMatchNumber ? "has-target" : ""
+                      }`}
+                      key={placement.match.id}
+                      style={{
+                        gridColumn: placement.column,
+                        gridRow: `${placement.rowStart} / span ${BRACKET_CARD_ROW_SPAN}`
+                      }}
+                    >
+                      {renderBracketCard(placement.match)}
+                    </div>
                   ))}
                 </div>
+                {thirdPlaceMatch ? (
+                  <div className="bracket-side-match">
+                    <div className="bracket-tree-heading">
+                      <strong>Third place</strong>
+                      <span>{hasCompletedResult(thirdPlaceMatch, results) ? "1 / 1" : "0 / 1"}</span>
+                    </div>
+                    {renderBracketCard(thirdPlaceMatch)}
+                  </div>
+                ) : null}
               </section>
             ) : null}
 

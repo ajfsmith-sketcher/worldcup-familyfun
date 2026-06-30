@@ -537,43 +537,70 @@ h2 {
   height: 100%;
 }
 
-.bracket-board {
+.bracket-tree {
+  align-items: stretch;
+  column-gap: 38px;
   display: grid;
-  gap: 12px;
-  grid-template-columns: repeat(6, minmax(220px, 1fr));
+  grid-auto-columns: minmax(230px, 230px);
+  grid-template-columns: repeat(5, minmax(230px, 230px));
   margin-top: 16px;
   overflow-x: auto;
-  padding-bottom: 8px;
+  padding-bottom: 12px;
 }
 
-.bracket-round {
-  display: grid;
-  gap: 10px;
-  min-width: 220px;
-}
-
-.bracket-round-heading {
+.bracket-tree-heading {
   align-items: center;
   display: flex;
   gap: 8px;
   justify-content: space-between;
+  min-width: 230px;
 }
 
-.bracket-round-heading strong {
+.bracket-tree-heading strong {
   color: var(--accent-strong);
   font-size: 0.78rem;
   text-transform: uppercase;
 }
 
-.bracket-round-heading span {
+.bracket-tree-heading span {
   color: var(--muted);
   font-size: 0.78rem;
   font-weight: 900;
 }
 
-.bracket-round-matches {
+.bracket-tree-slot {
+  min-width: 230px;
+  position: relative;
+  z-index: 1;
+}
+
+.bracket-tree-slot.has-sources::before,
+.bracket-tree-slot.has-target::after {
+  border-top: 2px solid #c8d5d8;
+  content: "";
+  position: absolute;
+  top: 50%;
+  width: 30px;
+  z-index: 0;
+}
+
+.bracket-tree-slot.has-sources::before {
+  left: -34px;
+}
+
+.bracket-tree-slot.has-target::after {
+  right: -34px;
+}
+
+.bracket-side-match {
+  background: var(--surface-muted);
+  border: 1px solid var(--line);
+  border-radius: 8px;
   display: grid;
   gap: 10px;
+  margin-top: 16px;
+  max-width: 280px;
+  padding: 10px;
 }
 
 .bracket-card {
@@ -583,6 +610,12 @@ h2 {
   display: grid;
   gap: 8px;
   padding: 10px;
+}
+
+.bracket-tree .bracket-card {
+  gap: 6px;
+  height: 100%;
+  padding: 8px;
 }
 
 .bracket-card.completed {
@@ -613,6 +646,12 @@ h2 {
   font-weight: 800;
 }
 
+.bracket-tree .bracket-card small {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
 .bracket-teams {
   display: grid;
   gap: 6px;
@@ -628,6 +667,11 @@ h2 {
   grid-template-columns: minmax(0, 1fr) auto;
   min-height: 38px;
   padding: 7px 8px;
+}
+
+.bracket-tree .bracket-teams span {
+  min-height: 30px;
+  padding: 4px 6px;
 }
 
 .bracket-teams span.advancing {
