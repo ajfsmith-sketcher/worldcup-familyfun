@@ -250,13 +250,13 @@ const syncScores = async ({ footballDataToken, supabase }: SyncContext) => {
     const extraTime = apiMatch.score?.extraTime;
     const penalties = apiMatch.score?.penalties;
     const scoreDuration = apiMatch.score?.duration ?? null;
-    const hasScore = hasScoreNode(fullTime);
-    if (apiMatch.status === "FINISHED" && !hasScore) {
+    const normalHomeScore = scoreSide(regularTime, "home") ?? scoreSide(fullTime, "home");
+    const normalAwayScore = scoreSide(regularTime, "away") ?? scoreSide(fullTime, "away");
+    const hasNormalScore = typeof normalHomeScore === "number" && typeof normalAwayScore === "number";
+    if (apiMatch.status === "FINISHED" && !hasNormalScore) {
       finishedWithoutScore += 1;
     }
 
-    const normalHomeScore = scoreSide(regularTime, "home") ?? scoreSide(fullTime, "home");
-    const normalAwayScore = scoreSide(regularTime, "away") ?? scoreSide(fullTime, "away");
     const extraHomeScore = scoreSide(extraTime, "home");
     const extraAwayScore = scoreSide(extraTime, "away");
     const penaltiesHomeScore = scoreSide(penalties, "home");
@@ -287,9 +287,9 @@ const syncScores = async ({ footballDataToken, supabase }: SyncContext) => {
       score_status: apiMatch.status
     };
 
-    if (hasScore) {
-      update.home_score = scoreSide(fullTime, "home");
-      update.away_score = scoreSide(fullTime, "away");
+    if (hasNormalScore) {
+      update.home_score = normalHomeScore;
+      update.away_score = normalAwayScore;
     }
 
     updates.push(supabase.from("matches").update(update).eq("id", localMatch.id));

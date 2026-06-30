@@ -840,17 +840,16 @@ function ActualScoreDisplay({
   score: ScorePick;
   scorers?: MatchScorerRow[];
 }) {
-  const hasNormalTime =
-    typeof match.normalTimeHomeScore === "number" && typeof match.normalTimeAwayScore === "number";
   const hasAfterExtraTime =
     typeof match.afterExtraTimeHomeScore === "number" && typeof match.afterExtraTimeAwayScore === "number";
   const hasPenalties =
     typeof match.penaltiesHomeScore === "number" && typeof match.penaltiesAwayScore === "number";
+  const hasKnockoutLayers = hasAfterExtraTime || hasPenalties || Boolean(match.advancingTeamName);
 
   return (
     <div className="actual-score-card">
       <div className="actual-score-heading">
-        <strong>Actual score</strong>
+        <strong>{hasKnockoutLayers ? "90 min result" : "Actual score"}</strong>
         {points !== undefined ? <span>{points} pts</span> : null}
       </div>
       <div className="actual-score-entry" aria-label={`Actual score for ${match.label}`}>
@@ -864,9 +863,8 @@ function ActualScoreDisplay({
           <b>{score.away}</b>
         </label>
       </div>
-      {hasNormalTime || hasAfterExtraTime || hasPenalties || match.advancingTeamName ? (
+      {hasKnockoutLayers ? (
         <div className="score-layer-list">
-          {hasNormalTime ? <span>FT {match.normalTimeHomeScore}-{match.normalTimeAwayScore}</span> : null}
           {hasAfterExtraTime ? <span>AET {match.afterExtraTimeHomeScore}-{match.afterExtraTimeAwayScore}</span> : null}
           {hasPenalties ? <span>Pens {match.penaltiesHomeScore}-{match.penaltiesAwayScore}</span> : null}
           {match.advancingTeamName ? <span>Advances {match.advancingTeamName}</span> : null}
