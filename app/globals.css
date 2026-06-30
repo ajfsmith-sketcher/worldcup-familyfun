@@ -519,6 +519,134 @@ h2 {
   width: 22px;
 }
 
+.bracket-panel {
+  overflow: hidden;
+}
+
+.bracket-progress {
+  background: var(--surface-muted);
+  border: 1px solid var(--line);
+  border-radius: 999px;
+  height: 12px;
+  overflow: hidden;
+}
+
+.bracket-progress span {
+  background: var(--accent);
+  display: block;
+  height: 100%;
+}
+
+.bracket-board {
+  display: grid;
+  gap: 12px;
+  grid-template-columns: repeat(6, minmax(220px, 1fr));
+  margin-top: 16px;
+  overflow-x: auto;
+  padding-bottom: 8px;
+}
+
+.bracket-round {
+  display: grid;
+  gap: 10px;
+  min-width: 220px;
+}
+
+.bracket-round-heading {
+  align-items: center;
+  display: flex;
+  gap: 8px;
+  justify-content: space-between;
+}
+
+.bracket-round-heading strong {
+  color: var(--accent-strong);
+  font-size: 0.78rem;
+  text-transform: uppercase;
+}
+
+.bracket-round-heading span {
+  color: var(--muted);
+  font-size: 0.78rem;
+  font-weight: 900;
+}
+
+.bracket-round-matches {
+  display: grid;
+  gap: 10px;
+}
+
+.bracket-card {
+  background: #fff;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  display: grid;
+  gap: 8px;
+  padding: 10px;
+}
+
+.bracket-card.completed {
+  border-color: #b8dfca;
+}
+
+.bracket-card.live {
+  border-color: #f6c453;
+}
+
+.bracket-card-meta {
+  align-items: center;
+  display: flex;
+  gap: 8px;
+  justify-content: space-between;
+}
+
+.bracket-card-meta strong {
+  color: var(--muted);
+  font-size: 0.72rem;
+  text-transform: uppercase;
+}
+
+.bracket-card-meta span,
+.bracket-card small {
+  color: var(--muted);
+  font-size: 0.72rem;
+  font-weight: 800;
+}
+
+.bracket-teams {
+  display: grid;
+  gap: 6px;
+}
+
+.bracket-teams span {
+  align-items: center;
+  background: var(--surface-muted);
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  display: grid;
+  gap: 8px;
+  grid-template-columns: minmax(0, 1fr) auto;
+  min-height: 38px;
+  padding: 7px 8px;
+}
+
+.bracket-teams span.advancing {
+  background: #edf9f1;
+  border-color: #b8dfca;
+}
+
+.bracket-teams b {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.bracket-teams em {
+  color: var(--ink);
+  font-style: normal;
+  font-weight: 900;
+}
+
 .scotland-celebration {
   align-items: center;
   background: rgba(3, 37, 65, 0.42);

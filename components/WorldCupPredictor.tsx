@@ -34,7 +34,7 @@ import {
 type ViewMode = "group" | "date";
 type GroupDisplayMode = "all" | "hide-games" | "hide-tables";
 type HistoryPointFilter = "-" | "all" | "0" | "1" | "2" | "3";
-type WorkspaceTab = "groups" | "knockouts" | "scorers" | "family" | "admin";
+type WorkspaceTab = "groups" | "knockouts" | "bracket" | "scorers" | "family" | "admin";
 type DateFilter = "all" | "today" | string;
 type GroupFilter = "all" | GroupId;
 type TeamFilter = "all" | string;
@@ -188,7 +188,7 @@ type MatchScorerRow = {
 };
 
 type WorkspaceTabItem = {
-  icon: "admin" | "family" | "groups" | "knockouts" | "scorers";
+  icon: "admin" | "bracket" | "family" | "groups" | "knockouts" | "scorers";
   label: string;
   tab: WorkspaceTab;
 };
@@ -247,6 +247,7 @@ const workspaceTabs: WorkspaceTabItem[] = [
   { icon: "family", label: "Family table", tab: "family" },
   { icon: "groups", label: "Group games", tab: "groups" },
   { icon: "knockouts", label: "Knockouts", tab: "knockouts" },
+  { icon: "bracket", label: "Bracket", tab: "bracket" },
   { icon: "scorers", label: "Scorers", tab: "scorers" },
   { icon: "admin", label: "Admin", tab: "admin" }
 ];
@@ -577,6 +578,70 @@ const hasCompletedResult = (match: MatchWithState, results: Record<string, Score
 const isUpcomingMatch = (match: MatchWithState) => !match.kickoffAt || new Date(match.kickoffAt).getTime() > Date.now();
 
 const hasKickedOff = (match: MatchWithState) => Boolean(match.kickoffAt && new Date(match.kickoffAt).getTime() <= Date.now());
+
+const resultWinnerSide = (score: ScorePick | undefined) => {
+  if (!hasScore(score)) return null;
+  const home = Number(score?.home);
+  const away = Number(score?.away);
+  if (home > away) return "home";
+  if (away > home) return "away";
+  return null;
+};
+
+const teamForSide = (match: MatchWithState, side: "away" | "home") => (side === "home" ? match.homeTeam : match.awayTeam);
+
+const advancingTeamForMatch = (match: MatchWithState, results: Record<string, ScorePick>) => {
+  if (match.advancingTeamName) {
+    const codeMatchesHome = match.advancingTeamCode && match.advancingTeamCode === match.homeTeam.code;
+    const codeMatchesAway = match.advancingTeamCode && match.advancingTeamCode === match.awayTeam.code;
+    if (codeMatchesHome) return match.homeTeam;
+    if (codeMatchesAway) return match.awayTeam;
+    return { code: match.advancingTeamCode ?? "", flag: "", name: match.advancingTeamName };
+  }
+
+  const winnerSide = resultWinnerSide(results[match.id]);
+  return winnerSide ? teamForSide(match, winnerSide) : null;
+};
+
+const losingTeamForMatch = (match: MatchWithState, results: Record<string, ScorePick>) => {
+  const winner = advancingTeamForMatch(match, results);
+  if (!winner) return null;
+  if (winner.code && winner.code === match.homeTeam.code) return match.awayTeam;
+  if (winner.code && winner.code === match.awayTeam.code) return match.homeTeam;
+  return null;
+};
+
+const resolveBracketParticipant = (
+  participantName: string,
+  matchesByNumber: Map<number, MatchWithState>,
+  results: Record<string, ScorePick>
+) => {
+  const source = participantName.match(/^(Winner|Loser) Match (\d+)$/);
+  if (!source) return participantName;
+
+  const sourceMatch = matchesByNumber.get(Number(source[2]));
+  if (!sourceMatch) return participantName;
+
+  const team = source[1] === "Winner" ? advancingTeamForMatch(sourceMatch, results) : losingTeamForMatch(sourceMatch, results);
+  return team ? `${team.flag ? `${team.flag} ` : ""}${team.name}` : participantName;
+};
+
+const bracketResultLabel = (match: MatchWithState, results: Record<string, ScorePick>) => {
+  const score = results[match.id];
+  if (!hasScore(score)) return match.kickoffAt ? formatKickoff(match) : "TBC";
+
+  const parts = [`90' ${score.home}-${score.away}`];
+  if (typeof match.afterExtraTimeHomeScore === "number" && typeof match.afterExtraTimeAwayScore === "number") {
+    parts.push(`AET ${match.afterExtraTimeHomeScore}-${match.afterExtraTimeAwayScore}`);
+  }
+  if (typeof match.penaltiesHomeScore === "number" && typeof match.penaltiesAwayScore === "number") {
+    parts.push(`Pens ${match.penaltiesHomeScore}-${match.penaltiesAwayScore}`);
+  }
+  if (match.advancingTeamName) {
+    parts.push(`${match.advancingTeamName} through`);
+  }
+  return parts.join(" · ");
+};
 
 const resultLabelForForecast = (match: MatchWithState, forecast: FamilyForecast) => {
   const resultCounts = [
@@ -915,6 +980,17 @@ function WorkspaceIcon({ icon }: { icon: WorkspaceTabItem["icon"] }) {
         <path d="M14 10h5v4h-5z" />
         <path d="M10 7h2a2 2 0 0 1 2 2v3" />
         <path d="M10 17h2a2 2 0 0 0 2-2v-3" />
+      </svg>
+    );
+  }
+  if (icon === "bracket") {
+    return (
+      <svg aria-hidden="true" className="workspace-tab-icon" viewBox="0 0 24 24">
+        <path d="M4 4h6v4H4z" />
+        <path d="M4 16h6v4H4z" />
+        <path d="M14 10h6v4h-6z" />
+        <path d="M10 6h2a2 2 0 0 1 2 2v4" />
+        <path d="M10 18h2a2 2 0 0 0 2-2v-4" />
       </svg>
     );
   }
@@ -1318,6 +1394,24 @@ export function WorldCupPredictor() {
         }))
         .filter((section) => section.matches.length > 0),
     [filteredKnockoutMatches]
+  );
+  const matchesByNumber = useMemo(
+    () => new Map(matches.map((match) => [match.matchNumber, match])),
+    [matches]
+  );
+  const bracketMatchesByRound = useMemo(
+    () =>
+      knockoutRounds
+        .map((round) => ({
+          matches: sortMatchesByKickoff(knockoutMatchList.filter((match) => match.round === round)),
+          round
+        }))
+        .filter((section) => section.matches.length > 0),
+    [knockoutMatchList]
+  );
+  const completedKnockoutCount = useMemo(
+    () => knockoutMatchList.filter((match) => hasCompletedResult(match, results)).length,
+    [knockoutMatchList, results]
   );
   const priorityCount = useMemo(
     () => filteredMatches.filter((match) => isPriorityPick(match, activePlayer?.matchPredictions[match.id])).length,
@@ -2102,6 +2196,36 @@ export function WorldCupPredictor() {
     );
   };
 
+  const renderBracketCard = (match: MatchWithState) => {
+    const score = results[match.id];
+    const completed = hasScore(score);
+    const advancingTeam = advancingTeamForMatch(match, results);
+    const homeLabel = resolveBracketParticipant(match.homeTeam.name, matchesByNumber, results);
+    const awayLabel = resolveBracketParticipant(match.awayTeam.name, matchesByNumber, results);
+    const homeAdvanced = Boolean(advancingTeam?.code && advancingTeam.code === match.homeTeam.code);
+    const awayAdvanced = Boolean(advancingTeam?.code && advancingTeam.code === match.awayTeam.code);
+
+    return (
+      <article className={`bracket-card ${completed ? "completed" : hasKickedOff(match) ? "live" : ""}`} key={match.id}>
+        <div className="bracket-card-meta">
+          <strong>{match.label}</strong>
+          <span>{formatKickoff(match)}</span>
+        </div>
+        <div className="bracket-teams">
+          <span className={homeAdvanced ? "advancing" : ""}>
+            <b>{homeLabel}</b>
+            {completed ? <em>{score.home}</em> : null}
+          </span>
+          <span className={awayAdvanced ? "advancing" : ""}>
+            <b>{awayLabel}</b>
+            {completed ? <em>{score.away}</em> : null}
+          </span>
+        </div>
+        <small>{bracketResultLabel(match, results)}</small>
+      </article>
+    );
+  };
+
   const renderAdminResultRow = (match: MatchWithState) => {
     const actualScore = normalizeScore(results[match.id]);
     const scored = hasScore(actualScore);
@@ -2598,6 +2722,39 @@ export function WorldCupPredictor() {
                           <span>Pts</span>
                         </div>
                         {section.matches.map(renderMatchRow)}
+                      </div>
+                    </section>
+                  ))}
+                </div>
+              </section>
+            ) : null}
+
+            {activeWorkspaceTab === "bracket" ? (
+              <section className="panel bracket-panel">
+                <div className="section-heading">
+                  <div>
+                    <p className="eyebrow">Knockout path</p>
+                    <h2>Tournament bracket</h2>
+                  </div>
+                  <span className="badge ok">
+                    {completedKnockoutCount} / {knockoutMatchList.length} decided
+                  </span>
+                </div>
+                <p className="muted-copy">
+                  The main score is the 90-minute predictor result. AET and penalty shootout scores appear underneath when needed.
+                </p>
+                <div className="bracket-progress" aria-label="Knockout progress">
+                  <span style={{ width: `${Math.round((completedKnockoutCount / Math.max(knockoutMatchList.length, 1)) * 100)}%` }} />
+                </div>
+                <div className="bracket-board" aria-label="World Cup knockout bracket">
+                  {bracketMatchesByRound.map((section) => (
+                    <section className="bracket-round" key={section.round}>
+                      <div className="bracket-round-heading">
+                        <strong>{section.round}</strong>
+                        <span>{section.matches.filter((match) => hasCompletedResult(match, results)).length} / {section.matches.length}</span>
+                      </div>
+                      <div className="bracket-round-matches">
+                        {section.matches.map(renderBracketCard)}
                       </div>
                     </section>
                   ))}
